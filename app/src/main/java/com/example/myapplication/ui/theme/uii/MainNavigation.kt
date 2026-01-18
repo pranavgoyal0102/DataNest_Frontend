@@ -1,6 +1,8 @@
 package com.example.myapplication.ui.theme.uii
 
+
 import android.app.Activity
+import coil.compose.AsyncImage
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -18,7 +20,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -111,8 +112,11 @@ import com.example.myapplication.ui.theme.models.FileStored
 import com.example.myapplication.ui.theme.viewModel.RoomViewModel
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.rememberAnimatedNavController
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
+import org.jetbrains.annotations.Async
 import java.io.File
+import java.util.UUID
 import kotlin.contracts.contract
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
@@ -142,6 +146,8 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
         targetValue = if (selectedTab == "Everything") 0f else 1f,
         label = "underline_offset_fraction"
     )
+    val auth = FirebaseAuth.getInstance()
+    val user = remember { mutableStateOf(auth.currentUser) }
     LaunchedEffect(sharedUri, sharedUris) {
         folderId = 1
         when {
@@ -198,8 +204,9 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
     }
     val tabs = listOf("Everything", "Starred")
     var folderName by remember { mutableStateOf("") }
-    LaunchedEffect(navController) {
-        folderName = roomViewModel.getFolderById(folderId).folderName
+    LaunchedEffect(folderId) {
+        val folder = roomViewModel.getFolderById(folderId)
+        folderName = folder?.folderName ?: "Unknown Folder"
     }
     LaunchedEffect(selectedTab) {
         isStarred = selectedTab == "Starred"
@@ -344,25 +351,53 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                         },
                                         trailingIcon = {
                                             if(search == "") showCancel = true else showCancel = false
-                                            AnimatedContent(
-                                                targetState = showCancel
-                                            ) {
-                                                    target ->
-                                                when(target){
-                                                    false -> Icon(imageVector = Icons.Default.Close,
-                                                        contentDescription = "Cancel",
-                                                        tint = Color.White,
-                                                        modifier= Modifier.size(26.dp).clickable {
-                                                            search = ""
-                                                            roomViewModel.search("", folderId)
-                                                        }
-                                                    )
-                                                    true -> Icon(imageVector = Account_circle,
-                                                        contentDescription = "Profile",
-                                                        tint = Color.Gray,
-                                                        modifier= Modifier.size(30.dp).clip(RoundedCornerShape(100)).clickable {
-                                                            navController.navigate("profile")
-                                                        })
+                                            if(user.value == null){
+                                                AnimatedContent(
+                                                    targetState = showCancel
+                                                ) {
+                                                        target ->
+                                                    when(target){
+                                                        false -> Icon(imageVector = Icons.Default.Close,
+                                                            contentDescription = "Cancel",
+                                                            tint = Color.White,
+                                                            modifier= Modifier.size(26.dp).clickable {
+                                                                search = ""
+                                                                roomViewModel.search("", folderId)
+                                                            }
+                                                        )
+                                                        true -> Icon(imageVector = Account_circle,
+                                                            contentDescription = "Profile",
+                                                            tint = Color.Gray,
+                                                            modifier= Modifier.size(30.dp).clip(RoundedCornerShape(100)).clickable {
+                                                                navController.navigate("profile")
+                                                            }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            else{
+                                                AnimatedContent(
+                                                    targetState = showCancel
+                                                ) {
+                                                        target ->
+                                                    when(target){
+                                                        false -> Icon(imageVector = Icons.Default.Close,
+                                                            contentDescription = "Cancel",
+                                                            tint = Color.White,
+                                                            modifier= Modifier.size(26.dp).clickable {
+                                                                search = ""
+                                                                roomViewModel.search("", folderId)
+                                                            }
+                                                        )
+                                                        true -> AsyncImage(
+                                                            model = user.value!!.photoUrl,
+                                                            contentDescription = "Profile Image",
+                                                            modifier = Modifier.size(30.dp).clip(RoundedCornerShape(100)).clickable {
+                                                                navController.navigate("profile")
+                                                            }
+                                                        )
+
+                                                    }
                                                 }
                                             }
                                         }
@@ -433,7 +468,9 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                                 title = newfile.first,
                                                 fileType = newfile.second,
                                                 path = newfile.third.toString(),
-                                                folderId = 1
+                                                folderId = 1,
+                                                isSynced = false,
+                                                syncId = UUID.randomUUID().toString()
                                             )
                                             roomViewModel.saveFile(fileToStore)
                                         }else{
@@ -442,7 +479,9 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                                     title = file.first,
                                                     fileType = file.second,
                                                     path = file.third.toString(),
-                                                    folderId = folderId
+                                                    folderId = folderId,
+                                                    isSynced = false,
+                                                    syncId = UUID.randomUUID().toString()
                                                 )
                                                 roomViewModel.saveFile(fileToStore)
                                             }
@@ -642,7 +681,7 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                 AnimatedNavHost(
                     modifier = Modifier.padding(innerPadding),
                     navController = navController,
-                    startDestination = "profile",
+                    startDestination = "home",
                     enterTransition = {
                         slideInHorizontally(
                             initialOffsetX = { 1000 },

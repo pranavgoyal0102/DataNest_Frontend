@@ -10,10 +10,4 @@ class RoomRepo(
     suspend fun saveFile(item: FileStored) = fileDao.saveFile(item)
     suspend fun deleteFile(item: FileStored) = fileDao.deleteFile(item)
     suspend fun updateFile(item: FileStored) = fileDao.updateFile(item)
-    suspend fun getFiles(id : Long) = fileDao.getFiles(id)
-    suspend fun createFolder(item: FolderEntity) = folderDao.createFolder(item)
-    suspend fun getRootFolder() = folderDao.getRootFolders()
-    suspend fun deleteFolder(item : FolderEntity) = folderDao.deleteFolder(item)
-    suspend fun getChildFolders(parentId : Long) = folderDao.getChildFolders(parentId)
-    suspend fun updateFolder(item: FolderEntity) = folderDao.updateFolder(item)
 }

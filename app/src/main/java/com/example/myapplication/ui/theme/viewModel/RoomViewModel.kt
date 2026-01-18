@@ -6,7 +6,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.ui.theme.mod.FolderEntity
 import com.example.myapplication.ui.theme.models.FileStored
-import com.example.myapplication.ui.theme.room.DatabaseProvider
+import com.example.myapplication.ui.theme.room.AppDatabase
 import kotlinx.coroutines.launch
 
 class RoomViewModel(application: Application) : AndroidViewModel(application)  {
@@ -20,7 +20,7 @@ class RoomViewModel(application: Application) : AndroidViewModel(application)  {
     private var _searchFileList = MutableLiveData<List<FileStored?>>(emptyList())
     val searchFileList = _searchFileList
 
-    private val db = DatabaseProvider.getDatabase(application)
+    private val db = AppDatabase.getDatabase(application)
 
     init{
         createHomeFolder()

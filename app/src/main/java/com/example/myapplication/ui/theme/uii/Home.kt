@@ -1,5 +1,6 @@
 package com.example.myapplication.ui.theme.uii
 
+import MaterialIconsSync_disabled
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -521,6 +522,11 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                         }
                     }
                 }
+                if(!file.isSynced){
+                    Icon(imageVector = MaterialIconsSync_disabled,
+                        contentDescription = "", tint = Color.Red,
+                        modifier = Modifier.size(20.dp))
+                }
                 Box(
                     modifier = Modifier
                 ){
@@ -626,14 +632,7 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            file.isDeleted = true
-                                            val newFile = file.copy(
-                                                isDeleted = file.isDeleted
-                                            )
-                                            roomViewModel.updateFile(
-                                                newFile,
-                                                onResult = {success, message ->}
-                                            )
+                                            roomViewModel.deleteFile(file)
                                         },
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

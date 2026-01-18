@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.example.myapplication.ui.theme.uii.MainNavigation
 import com.example.myapplication.ui.theme.viewModel.RoomViewModel
@@ -19,13 +20,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Handle the shared file intent (if app opened via Share)
         handleShareIntent(intent)
 
         setContent {
             MyApplicationTheme(darkTheme = true) {
-                val roomViewModel: RoomViewModel = ViewModelProvider(this)[RoomViewModel::class.java]
+                val roomViewModel: RoomViewModel = viewModel()
 
                 MainNavigation(
                     roomViewModel = roomViewModel,

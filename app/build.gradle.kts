@@ -38,23 +38,40 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.3"
+        kotlinCompilerExtensionVersion = "1.5.10"  // Updated to match Kotlin 1.9.22
     }
 }
 
+// Add this KAPT configuration
+kapt {
+    javacOptions {
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED")
+        option("--add-opens", "jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED")
+    }
+}
 
 dependencies {
+    // ... rest of your dependencies remain the same
 
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-firestore-ktx")
 
     implementation(libs.navigation.compose)
     implementation ("com.google.accompanist:accompanist-navigation-animation:0.36.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
-
-
     implementation(libs.room.runtime)
     implementation(libs.androidx.runtime.livedata)
-    implementation(libs.firebase.auth)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
