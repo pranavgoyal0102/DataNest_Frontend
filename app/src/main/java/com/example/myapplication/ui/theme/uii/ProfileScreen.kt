@@ -24,15 +24,16 @@ import com.example.myapplication.ui.theme.viewModel.GoogleAuthUiClient
 import com.google.firebase.auth.FirebaseAuth
 import androidx.credentials.CustomCredential
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.myapplication.ui.theme.viewModel.SyncViewModel
+import com.example.myapplication.ui.theme.viewModel.RoomViewModel
+import com.example.myapplication.ui.theme.worker.SyncScheduler
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
 
 @Composable
 fun ProfileScreen(navController: NavController) {
 
+    val roomViewModel: RoomViewModel = viewModel()
     val context = LocalContext.current
-    val syncViewModel : SyncViewModel = viewModel()
     val activity = context.findActivity()
     val scope = rememberCoroutineScope()
 
@@ -49,6 +50,7 @@ fun ProfileScreen(navController: NavController) {
         auth.addAuthStateListener(listener)
         onDispose { auth.removeAuthStateListener(listener) }
     }
+
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -104,15 +106,30 @@ fun ProfileScreen(navController: NavController) {
                             val googleCredential =
                                 GoogleIdTokenCredential.createFrom(credential.data)
 
-                            googleClient.firebaseAuthWithGoogle(
-                                googleCredential.idToken
-                            )
+                            val firebaseUser =
+                                googleClient.firebaseAuthWithGoogle(
+                                    googleCredential.idToken
+                                )
 
-                            Toast.makeText(
-                                context,
-                                "Login successful",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            if(firebaseUser != null){
+
+                                roomViewModel.syncAllFiles()
+                                SyncScheduler.start(context)
+
+                                Toast.makeText(
+                                    context,
+                                    "Login successful",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                            }else{
+
+                                Toast.makeText(
+                                    context,
+                                    "Authentication failed",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
 
                     } catch (e: Exception) {
@@ -129,17 +146,10 @@ fun ProfileScreen(navController: NavController) {
             }
         }
 
-        TextButton(onClick = {
-            syncViewModel.syncNow()
-        }) {
-            Text(text = "Sync Now")
-        }
+
     }
 }
 
-/**
- * 🔥 REQUIRED helper for Credential Manager
- */
 fun Context.findActivity(): Activity {
     var ctx = this
     while (ctx is ContextWrapper) {

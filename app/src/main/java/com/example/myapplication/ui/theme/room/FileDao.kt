@@ -1,42 +1,232 @@
 package com.example.myapplication.ui.theme.room
 
-import com.example.myapplication.ui.theme.models.FileStored
 import androidx.room.*
-import com.example.myapplication.ui.theme.mod.FolderEntity
+import com.example.myapplication.ui.theme.models.FileStored
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FileDao {
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveFile(file: FileStored): Long
+    suspend fun insertFile(file: FileStored): Long
 
-    @Delete
-    suspend fun deleteFile(file: FileStored)
-
-    @Query("SELECT * FROM files WHERE folderId = :folderId")
-    suspend fun getFiles(folderId: Long): List<FileStored>
-
-    @Query("SELECT * FROM files WHERE folderId = :folderId AND title LIKE '%' || :query || '%'")
-    suspend fun searchFiles(query: String, folderId: Long): List<FileStored>
-
-    @Query("SELECT * FROM files WHERE folderId = :folderId AND title = :name LIMIT 1")
-    suspend fun getFileByName(folderId: Long, name: String): FileStored?
-
-    @Query("SELECT * FROM files WHERE syncId = :syncId LIMIT 1")
-    suspend fun getFilesBySyncId(syncId: String): FileStored?
-
-    @Query("SELECT * FROM files WHERE isSynced = 0")
-    suspend fun getUnSyncedFiles() : List<FileStored>
-
-    @Query("UPDATE files set isSynced = 1 where id = :id")
-    suspend fun markAsSynced(id : Long)
-
-    @Query("UPDATE files set updatedAt = :time where id = :id")
-    suspend fun updateTime(id : Long, time: Long)
 
     @Update
     suspend fun updateFile(file: FileStored)
 
-    @Query("UPDATE files SET isSynced = 0")
+
+    @Query("""
+        SELECT * FROM files
+        WHERE isDeleted = 0
+        ORDER BY updatedAt DESC
+    """)
+    fun getFiles(): Flow<List<FileStored>>
+
+
+    @Query("""
+        SELECT * FROM files
+        WHERE id = :id
+        LIMIT 1
+    """)
+    suspend fun getFileById(id: Long): FileStored?
+
+
+
+    @Query("""
+        SELECT * FROM files
+        WHERE title = :name
+        LIMIT 1
+    """)
+    suspend fun getFileByName(name: String): FileStored?
+
+
+
+    @Query("""
+        SELECT * FROM files
+        WHERE title LIKE '%' || :query || '%'
+        AND isDeleted = 0
+        ORDER BY updatedAt DESC
+    """)
+    fun searchFiles(query: String): Flow<List<FileStored>>
+
+
+    @Query("""
+        SELECT * FROM files
+        WHERE isStarred = 1
+        AND isDeleted = 0
+        ORDER BY updatedAt DESC
+    """)
+    fun getStarredFiles(): Flow<List<FileStored>>
+
+
+    @Query("""
+        SELECT * FROM files
+        WHERE isDeleted = 1
+        ORDER BY updatedAt DESC
+    """)
+    fun getDeletedFiles(): Flow<List<FileStored>>
+
+
+    @Query("""
+        SELECT * FROM files
+        WHERE folderId = :folderId
+        AND isDeleted = 0
+        ORDER BY title ASC
+    """)
+    fun getFilesByFolder(folderId: Long): Flow<List<FileStored>>
+
+
+
+    @Query("""
+        UPDATE files
+        SET syncStatus = 'SYNCED'
+        WHERE id = :id
+    """)
+    suspend fun markAsSynced(id: Long)
+
+
+    @Query("""
+        UPDATE files
+        SET syncStatus = 'LOCAL_ONLY'
+    """)
     suspend fun markAllAsUnsynced()
+
+
+    @Query("""
+        UPDATE files
+        SET syncStatus = :status
+        WHERE id = :id
+    """)
+    suspend fun updateSyncStatus(
+        id: Long,
+        status: String
+    )
+
+
+    @Query("""
+    UPDATE files
+    SET isStarred = :starred,
+        updatedAt = :time
+    WHERE id = :id
+""")
+    suspend fun updateStarStatus(
+        id: Long,
+        starred: Boolean,
+        time: Long
+    )
+
+
+    @Query("""
+    UPDATE files
+    SET isDeleted = 1,
+        updatedAt = :time
+    WHERE id = :id
+""")
+    suspend fun moveToTrash(
+        id: Long,
+        time: Long
+    )
+
+
+    @Query("""
+    UPDATE files
+    SET isDeleted = 0,
+        updatedAt = :time
+    WHERE id = :id
+""")
+    suspend fun restoreFromTrash(
+        id: Long,
+        time: Long
+    )
+
+
+
+    @Query("""
+        SELECT COUNT(*)
+        FROM files
+        WHERE isDeleted = 0
+    """)
+    suspend fun getFilesCount(): Int
+
+
+    @Query("""
+        SELECT COUNT(*)
+        FROM files
+        WHERE syncStatus != 'SYNCED'
+    """)
+    suspend fun getPendingSyncCount(): Int
+
+
+    @Query("""
+    SELECT EXISTS(
+        SELECT 1
+        FROM files
+        WHERE title = :title
+    )
+""")
+    suspend fun fileExists(
+        title: String
+    ): Boolean
+
+    @Query("""
+    SELECT COUNT(*)
+    FROM files
+    WHERE syncStatus = 'SYNCED'
+""")
+    suspend fun getSyncedCount(): Int
+
+    @Query("SELECT * FROM files WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun getFileByRemoteId(remoteId: String): FileStored?
+
+
+    @Query("""
+    SELECT * FROM files
+    WHERE syncStatus = 'LOCAL_ONLY'
+""")
+    suspend fun getLocalOnlyFiles(): List<FileStored>
+
+
+    @Query("""
+    SELECT * FROM files
+    WHERE syncStatus = 'PENDING_UPDATE'
+""")
+    suspend fun getPendingUpdateFiles(): List<FileStored>
+
+
+    @Query("""
+    SELECT * FROM files
+    WHERE syncStatus = 'PENDING_DELETE'
+""")
+    suspend fun getPendingDeleteFiles(): List<FileStored>
+
+    @Query("""
+    UPDATE files
+    SET remoteId = :remoteId
+    WHERE id = :id
+""")
+
+
+    suspend fun updateRemoteId(
+        id: Long,
+        remoteId: String
+    )
+
+    @Delete
+    suspend fun deleteFile(
+        file: FileStored
+    )
+
+    @Query("""
+    SELECT * FROM files
+    WHERE syncStatus = 'FAILED'
+    """)
+    suspend fun getFailedFiles(): List<FileStored>
+
+    @Query("""
+    SELECT * FROM files
+    WHERE syncStatus = 'LOCAL_ONLY'
+    OR syncStatus = 'FAILED'
+    """)
+    suspend fun getPendingUploadFiles(): List<FileStored>
 
 }

@@ -1,136 +1,239 @@
 package com.example.myapplication.ui.theme.viewModel
 
+
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.ui.theme.mod.FolderEntity
 import com.example.myapplication.ui.theme.models.FileStored
-import com.example.myapplication.ui.theme.room.AppDatabase
+import com.example.myapplication.ui.theme.models.SyncStatus
+import com.example.myapplication.ui.theme.network.FileRemoteRepository
 import kotlinx.coroutines.launch
+import com.example.myapplication.ui.theme.room.AppDatabase
+import com.example.myapplication.ui.theme.room.FileRepository
+import com.example.myapplication.ui.theme.room.SyncRepo
+import com.example.myapplication.ui.theme.worker.SyncScheduler
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 
-class RoomViewModel(application: Application) : AndroidViewModel(application)  {
-    private var _folderList = MutableLiveData<List<FolderEntity>>(emptyList())
-    val folderList : MutableLiveData<List<FolderEntity>> = _folderList
-    private var _fileList = MutableLiveData<List<FileStored?>>(emptyList())
-    val fileList = _fileList
 
-    private var _searchFolderList = MutableLiveData<List<FolderEntity>>(emptyList())
-    val searchFolderList : MutableLiveData<List<FolderEntity>> = _searchFolderList
-    private var _searchFileList = MutableLiveData<List<FileStored?>>(emptyList())
-    val searchFileList = _searchFileList
+class RoomViewModel(
+    application: Application
+) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
 
-    init{
-        createHomeFolder()
-    }
+    private val repository = FileRepository(
+        db.fileDao()
+    )
+    private val remoteRepository =
+        FileRemoteRepository()
 
-    fun getFiles(id : Long) {
+    private val syncRepository =
+        SyncRepo(
+            application,
+            repository,
+            remoteRepository
+        )
+    private var searchJob: Job? = null
+
+    val fileList = repository
+        .getFiles()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val deletedFiles =
+        repository
+            .getDeletedFiles()
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5000),
+                emptyList()
+            )
+
+    private val _searchFileList =
+        MutableStateFlow<List<FileStored>>(emptyList())
+
+    val searchFileList: StateFlow<List<FileStored>>
+        get() = _searchFileList.asStateFlow()
+
+
+    fun saveFile(
+        file: FileStored,
+        context: Context
+    ) {
+
         viewModelScope.launch {
-            _fileList.value = db.fileDao().getFiles(id)
+
+            repository.saveFile(file)
+
+            SyncScheduler.start(
+                context
+            )
         }
     }
-    fun saveFile(file : FileStored) {
-        viewModelScope.launch {
-            db.fileDao().saveFile(file)
-            val folderId = file.folderId
-            getFiles(folderId)
-        }
-    }
-    fun search(query: String, folderId: Long) {
-        viewModelScope.launch {
-            val files = db.fileDao().searchFiles(query, folderId)
-            _searchFileList.value = files
 
-            val folders = db.folderDao().searchFolders(query, folderId)
-            _searchFolderList.value = folders
-        }
-    }
-
-    fun updateFile(file: FileStored, onResult: (Boolean, String) -> Unit) {
+    fun deleteFile(file: FileStored) {
         viewModelScope.launch {
-            val originalExtension = file.title.substringAfterLast('.', "")
 
-            var safeTitle = file.title
-            if (!file.title.contains(".") && originalExtension.isNotEmpty()) {
-                safeTitle = "${file.title}.$originalExtension"
+            if (file != null) {
+
+                repository.updateFile(
+
+                    file.copy(
+
+                        updatedAt =
+                        System.currentTimeMillis(),
+
+                        syncStatus =
+                        SyncStatus.PENDING_DELETE
+                    )
+                )
             }
-            val safeFile = file.copy(title = safeTitle)
-            val existing = db.folderDao().getFolderByName(safeFile.folderId, safeFile.title)
-            if (existing != null) {
-                onResult(false, "File with this name already exists!")
+        }
+    }
+
+    fun search(query: String) {
+
+        searchJob?.cancel()
+
+        searchJob = viewModelScope.launch {
+
+            if (query.isBlank()) {
+
+                repository
+                    .getFiles()
+                    .collectLatest {
+
+                        _searchFileList.value = it
+
+                    }
+
             } else {
-                db.fileDao().updateFile(safeFile)
-                onResult(true, "File Renamed")
-                getFiles(safeFile.folderId)
+
+                repository
+                    .searchFiles(query)
+                    .collectLatest {
+
+                        _searchFileList.value = it
+
+                    }
             }
         }
     }
 
-    fun deleteFile(file : FileStored) {
-        viewModelScope.launch {
-            db.fileDao().deleteFile(file)
-            val folderId = file.folderId
-            getFiles(folderId)
-        }
-    }
-    fun updateFolder(folder: FolderEntity, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            try {
-                val existing = db.folderDao().getFolderByName(folder.parentId ?: 0, folder.folderName)
-                if (existing != null && existing.id != folder.id) {
-                    onResult(false, "Folder with this name already exists!")
-                } else {
-                    db.folderDao().updateFolder(folder)
-                    onResult(true, "Folder Updated")
-                    getFolders(folder.parentId ?: 0)
-                }
-            } catch (e: Exception) {
-                onResult(false, "Error: ${e.message}")
-            }
-        }
-    }
+    fun updateFile(
+        file: FileStored,
+        onResult: (Boolean, String) -> Unit
+    ) {
 
-    fun getFolders(parentId : Long) {
         viewModelScope.launch {
-            _folderList.value = db.folderDao().getChildFolders(parentId)
-        }
-    }
-    fun saveFolder(folder: FolderEntity, onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            val existing = db.folderDao().getFolderByName(folder.parentId ?: 0, folder.folderName)
-            if (existing != null) {
-                onResult(false, "Folder with this name already exists!")
+
+            val existing =
+                repository.getFileByName(file.title)
+
+            if (
+                existing != null &&
+                existing.id != file.id
+            ) {
+
+                onResult(
+                    false,
+                    "File with this name already exists!"
+                )
+
             } else {
-                db.folderDao().createFolder(folder)
-                onResult(true, "Folder Created")
-                getFolders(folder.parentId ?: 0)
+
+                repository.updateFile(
+                    file.copy(
+                        updatedAt = System.currentTimeMillis(),
+                        syncStatus = SyncStatus.PENDING_UPDATE
+                    )
+                )
+
+                onResult(
+                    true,
+                    "File Updated"
+                )
             }
         }
     }
-    suspend fun getFolderById(id: Long): FolderEntity {
-        return db.folderDao().getFolderById(id)
-    }
-    fun deleteFolder(folder : FolderEntity) {
-        val pid = folder.parentId
+
+
+    fun moveToTrash(id: Long) {
+
         viewModelScope.launch {
-            db.folderDao().deleteFolder(folder)
+
+            val file =
+                repository.getFileById(id)
+
+            if (file != null) {
+
+                repository.updateFile(
+
+                    file.copy(
+
+                        isDeleted = true,
+
+                        updatedAt =
+                        System.currentTimeMillis(),
+
+                        syncStatus =
+                        SyncStatus.PENDING_UPDATE
+                    )
+                )
+            }
         }
-        getFolders(pid ?: -1)
     }
-    private fun createHomeFolder() {
+
+    fun restoreFromTrash(id: Long) {
+
         viewModelScope.launch {
-            val home = db.folderDao().getRootFolders()
-            val bin = db.folderDao().getRootFolders()
-            if(home == null){
-                val homeFolder = FolderEntity(folderName = "Home", parentId = -1)
-                db.folderDao().createFolder(homeFolder)
+
+            val file =
+                repository.getFileById(id)
+
+            if (file != null) {
+
+                repository.updateFile(
+
+                    file.copy(
+
+                        isDeleted = false,
+
+                        updatedAt =
+                        System.currentTimeMillis(),
+
+                        syncStatus =
+                        SyncStatus.PENDING_UPDATE
+                    )
+                )
             }
-            if(bin == null){
-                val binFolder = FolderEntity(folderName = "Bin", parentId = -1)
-                db.folderDao().createFolder((binFolder))
-            }
+        }
+    }
+
+    fun syncAllFiles() {
+
+        val user =
+            FirebaseAuth
+                .getInstance()
+                .currentUser
+                ?: return
+
+        viewModelScope.launch {
+
+            syncRepository.syncAllFiles(
+                user.uid
+            )
         }
     }
 }

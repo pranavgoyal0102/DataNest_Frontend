@@ -49,16 +49,11 @@ import com.example.myapplication.ui.theme.icons.Solid_Folder
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewFilesScreen(
-    folderName : String,
     navController: NavController,
     files: List<Triple<String, String, Uri>>,
     onRemove: (Triple<String, String, Uri>) -> Unit,
     newFile : Triple<String, String, Uri>? = null
 ) {
-    var location by remember { mutableStateOf("  $folderName") }
-    if(newFile != null){
-        location = "Home"
-    }
     TopAppBar(title = {
     },
         modifier = Modifier.height(100.dp))
@@ -204,26 +199,7 @@ fun ReviewFilesScreen(
                         navController.navigateUp()
                     }
                 }
-
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(value = location,
-                    onValueChange = {location = it},
-                    enabled = false,
-                    textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                    maxLines = 1,
-                    leadingIcon = {
-                        Icon(imageVector = Solid_Folder,
-                            contentDescription = "",
-                            tint = Color.White)
-                    },
-                    shape = RoundedCornerShape(20),
-                    colors = TextFieldDefaults.outlinedTextFieldColors(
-                        focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.White,
-                        disabledBorderColor = Color.White,
-                        errorBorderColor = Color.White
-                    ),
-                    label = { Text(text = "Location", color = Color.White) },)
             }
             Spacer(modifier = Modifier.height(24.dp))
         }

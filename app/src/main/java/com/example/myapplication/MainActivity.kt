@@ -3,6 +3,7 @@ package com.example.myapplication
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,6 +12,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.example.myapplication.ui.theme.uii.MainNavigation
 import com.example.myapplication.ui.theme.viewModel.RoomViewModel
+import com.example.myapplication.ui.theme.worker.SyncScheduler
+import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
 
@@ -21,13 +24,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleShareIntent(intent)
+        Log.e(
+            "AUTH_CHECK",
+            "User = ${
+                FirebaseAuth
+                    .getInstance()
+                    .currentUser?.uid
+            }"
+        )
+        SyncScheduler.start(this)
+        Log.d("SYNC", "Worker scheduled")
 
         setContent {
             MyApplicationTheme(darkTheme = true) {
-                val roomViewModel: RoomViewModel = viewModel()
-
                 MainNavigation(
-                    roomViewModel = roomViewModel,
                     sharedUri = sharedUri,
                     sharedUris = sharedUris
                 )
@@ -40,15 +50,43 @@ class MainActivity : ComponentActivity() {
         handleShareIntent(intent)
     }
 
-    private fun handleShareIntent(intent: Intent?) {
+    private fun handleShareIntent(
+        intent: Intent?
+    ) {
+
+        Log.e(
+            "SHARE_DEBUG",
+            "action = ${intent?.action}"
+        )
+
         if (intent == null) return
 
         when (intent.action) {
+
             Intent.ACTION_SEND -> {
-                sharedUri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
+
+                sharedUri =
+                    intent.getParcelableExtra(
+                        Intent.EXTRA_STREAM
+                    )
+
+                Log.e(
+                    "SHARE_DEBUG",
+                    "sharedUri = $sharedUri"
+                )
             }
+
             Intent.ACTION_SEND_MULTIPLE -> {
-                sharedUris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+
+                sharedUris =
+                    intent.getParcelableArrayListExtra(
+                        Intent.EXTRA_STREAM
+                    )
+
+                Log.e(
+                    "SHARE_DEBUG",
+                    "sharedUris = ${sharedUris?.size}"
+                )
             }
         }
     }

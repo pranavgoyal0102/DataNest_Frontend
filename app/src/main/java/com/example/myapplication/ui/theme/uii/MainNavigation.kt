@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.theme.uii
 
 
+import android.Manifest
 import android.app.Activity
 import coil.compose.AsyncImage
 import android.content.Context
@@ -58,6 +59,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -70,6 +72,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -89,6 +92,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -105,27 +109,30 @@ import com.example.myapplication.ui.theme.icons.Folder
 import com.example.myapplication.ui.theme.icons.ImageIcon
 import com.example.myapplication.ui.theme.icons.Question
 import com.example.myapplication.ui.theme.icons.Solid_Folder
+import com.example.myapplication.ui.theme.icons.Sync
 import com.example.myapplication.ui.theme.icons.Upload
 import com.example.myapplication.ui.theme.icons.sideBar
-import com.example.myapplication.ui.theme.mod.FolderEntity
 import com.example.myapplication.ui.theme.models.FileStored
+import com.example.myapplication.ui.theme.models.SyncStatus
 import com.example.myapplication.ui.theme.viewModel.RoomViewModel
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.rememberAnimatedNavController
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
-import org.jetbrains.annotations.Async
 import java.io.File
 import java.util.UUID
-import kotlin.contracts.contract
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
-fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
+fun MainNavigation(sharedUri: Uri? = null,
                    sharedUris: List<Uri>? = null) {
+
+
+    val context  = LocalContext.current
+
+    val roomViewModel : RoomViewModel = viewModel()
     val navController = rememberAnimatedNavController()
     var search by remember { mutableStateOf("") }
-    var rightDrawer by remember { mutableStateOf(false) }
     var showCancel by remember { mutableStateOf(false) }
     var showCreateFolder by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf("Everything") }
@@ -134,8 +141,6 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
     var showBottomSheet by remember { mutableStateOf(false)}
     var showCameraOptions by remember { mutableStateOf(false) }
     var mediaUri by remember { mutableStateOf<Uri?>(null) }
-    var folderId by remember { mutableLongStateOf(1) }
-    var currentParentId by remember { mutableLongStateOf(-1) }
     var selectedFiles by remember { mutableStateOf<List<Triple<String, String, Uri>>>(emptyList()) }
     var showReviewScreen by remember { mutableStateOf(false) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -147,9 +152,28 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
         label = "underline_offset_fraction"
     )
     val auth = FirebaseAuth.getInstance()
-    val user = remember { mutableStateOf(auth.currentUser) }
+    val user = remember {
+        mutableStateOf(auth.currentUser)
+    }
+
+    DisposableEffect(Unit) {
+
+        val listener =
+            FirebaseAuth.AuthStateListener {
+
+                user.value = it.currentUser
+
+            }
+
+        auth.addAuthStateListener(listener)
+
+        onDispose {
+
+            auth.removeAuthStateListener(listener)
+
+        }
+    }
     LaunchedEffect(sharedUri, sharedUris) {
-        folderId = 1
         when {
             sharedUri != null -> {
                 navController.navigate("reviewscreen?uri=${Uri.encode(sharedUri.toString())}")
@@ -160,7 +184,6 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
             }
         }
     }
-    val context  = LocalContext.current
     var captureMode by remember { mutableStateOf("") }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -203,11 +226,6 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
         }
     }
     val tabs = listOf("Everything", "Starred")
-    var folderName by remember { mutableStateOf("") }
-    LaunchedEffect(folderId) {
-        val folder = roomViewModel.getFolderById(folderId)
-        folderName = folder?.folderName ?: "Unknown Folder"
-    }
     LaunchedEffect(selectedTab) {
         isStarred = selectedTab == "Starred"
     }
@@ -267,15 +285,14 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                         label = { Text("Bin",fontSize = 18.sp) },
                         selected = false,
                         onClick = {
+                            navController.navigate("trash")
                             scope.launch { drawerState.close() }
-                            folderId = 2
-                            currentParentId = -1
                         }
                     )
                     NavigationDrawerItem(
                         icon = { Icon(imageVector = Feedback,
                             contentDescription = "",
-                            ) },
+                        ) },
                         label = { Text("Feedback",fontSize = 18.sp) },
                         selected = false,
                         onClick = {
@@ -294,7 +311,7 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                     )
                 }
             }
-    }) {
+        }) {
         Scaffold(
             modifier = Modifier.fillMaxSize()
                 .background(Color(0Xff18191B))
@@ -333,7 +350,7 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                 Row {
                                     OutlinedTextField(value = search,
                                         onValueChange = {search = it
-                                            roomViewModel.search(search,folderId)
+                                            roomViewModel.search(search)
                                         },
                                         placeholder = {
                                             Text(text = "Search in Nest")
@@ -362,7 +379,7 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                                             tint = Color.White,
                                                             modifier= Modifier.size(26.dp).clickable {
                                                                 search = ""
-                                                                roomViewModel.search("", folderId)
+                                                                roomViewModel.search("",)
                                                             }
                                                         )
                                                         true -> Icon(imageVector = Account_circle,
@@ -386,7 +403,7 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                                             tint = Color.White,
                                                             modifier= Modifier.size(26.dp).clickable {
                                                                 search = ""
-                                                                roomViewModel.search("", folderId)
+                                                                roomViewModel.search("")
                                                             }
                                                         )
                                                         true -> AsyncImage(
@@ -460,30 +477,31 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                         })
                                     Text("Review Selected Files", fontSize = 20.sp, color = Color.White)
                                     TextButton(onClick = {
-                                        if(sharedUri != null){
-                                            val new : FileInfo =
-                                                getFileInfo(context, sharedUri)
-                                            val newfile = Triple(new.name, new.mimeType, new.uri)
-                                            val fileToStore = FileStored(
-                                                title = newfile.first,
-                                                fileType = newfile.second,
-                                                path = newfile.third.toString(),
-                                                folderId = 1,
-                                                isSynced = false,
-                                                syncId = UUID.randomUUID().toString()
+                                        if (sharedUri != null) {
+                                            val info = getFileInfo(
+                                                context,
+                                                sharedUri
                                             )
-                                            roomViewModel.saveFile(fileToStore)
-                                        }else{
-                                            for (file in selectedFiles) {
-                                                val fileToStore = FileStored(
-                                                    title = file.first,
-                                                    fileType = file.second,
-                                                    path = file.third.toString(),
-                                                    folderId = folderId,
-                                                    isSynced = false,
-                                                    syncId = UUID.randomUUID().toString()
+                                            roomViewModel.saveFile(
+                                                createFileStored(
+                                                    context = context,
+                                                    name = info.name,
+                                                    mimeType = info.mimeType,
+                                                    uri = info.uri
+                                                ),
+                                                context = context
+                                            )
+                                        } else {
+                                            selectedFiles.forEach { file ->
+                                                roomViewModel.saveFile(
+                                                    createFileStored(
+                                                        context = context,
+                                                        name = file.first,
+                                                        mimeType = file.second,
+                                                        uri = file.third
+                                                    ),
+                                                    context = context
                                                 )
-                                                roomViewModel.saveFile(fileToStore)
                                             }
                                         }
                                         showReviewScreen = false
@@ -499,17 +517,30 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
             },
             floatingActionButton = {
                 if(currentRoute != "reviewscreen" && currentRoute != "profile"){
-                    FloatingActionButton(onClick = {
-                        showBottomSheet = true
-                    },
-                        modifier = Modifier.size(70.dp).offset(x=-15.dp, y=-15.dp),
-                        contentColor = Color.White,
-                        containerColor = Color(0Xff242527)) {
-                        Icon(imageVector = Icons.Default.Add,
-                            contentDescription = "Settings",
-                            tint = Color.White,
-                            modifier = Modifier.size(45.dp)
-                        )
+                    Column (
+                    ){
+                        Row(
+                            modifier = Modifier
+                        ) {
+                            IconButton(onClick = {
+                            }) {
+                                Icon(imageVector = Sync, contentDescription = null)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        FloatingActionButton(onClick = {
+                            showBottomSheet = true
+                        },
+                            modifier = Modifier.size(70.dp).offset(x=-15.dp, y=-15.dp),
+                            contentColor = Color.White,
+                            containerColor = Color(0Xff242527)) {
+                            Icon(imageVector = Icons.Default.Add,
+                                contentDescription = "Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(45.dp)
+                            )
+                        }
+
                     }
                 }
             }
@@ -572,7 +603,7 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                         .weight(1f)
                                         .wrapContentSize()
                                         .clickable {
-                                            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                                             showCameraOptions = true
                                         }
                                 ) {
@@ -655,21 +686,6 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                                         Text(text = "Cancel")
                                     }
                                     TextButton(onClick = {
-                                        val newFolder = FolderEntity(
-                                            folderName = createFolderName,
-                                            parentId = folderId
-                                        )
-                                        roomViewModel.saveFolder(newFolder) { success, message ->
-                                            if (!success) {
-                                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                                createFolderName = "New folder"
-                                            } else {
-                                                showCreateFolder = false
-                                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                                showBottomSheet = false
-                                                createFolderName = "New folder"
-                                            }
-                                        }
                                     }) {
                                         Text(text = "Create")
                                     }
@@ -713,27 +729,20 @@ fun MainNavigation(roomViewModel: RoomViewModel, sharedUri: Uri? = null,
                     composable("home") {
                         Home(
                             isStarred,
-                            folderId,
                             roomViewModel,
-                            navController,
-                            onClick = { fId, pId ->
-                                folderId = fId
-                                currentParentId = pId
-                                navController.navigate("home")
-                                search = ""
-                                roomViewModel.search(search, folderId)
-                            }
                         )
+                    }
+                    composable("trash"){
+                        TrashScreen(roomViewModel)
                     }
                     composable("reviewscreen?uri={uri}",
                         arguments = listOf(navArgument("uri") {nullable = true})
                     ) {
-                        entry ->
+                            entry ->
                         val uri = entry.arguments?.getString("uri")?.let { Uri.parse(it) }
                         val new : FileInfo? = uri?.let { getFileInfo(context, it) }
                         val newfile = new?.let { Triple(it.name, new.mimeType, new.uri) }
                         ReviewFilesScreen(
-                            folderName,
                             navController,
                             files = selectedFiles,
                             onRemove = { file -> selectedFiles = selectedFiles - file },
@@ -789,8 +798,37 @@ fun getFileInfo(context: Context, uri: Uri): FileInfo {
 }
 
 
+fun createFileStored(
+    context: Context,
+    name: String,
+    mimeType: String,
+    uri: Uri
+): FileStored {
 
+    val size = context.contentResolver
+        .query(uri, null, null, null, null)
+        ?.use { cursor ->
 
+            val sizeIndex =
+                cursor.getColumnIndex(OpenableColumns.SIZE)
 
+            if (
+                cursor.moveToFirst() &&
+                sizeIndex >= 0
+            ) {
+                cursor.getLong(sizeIndex)
+            } else {
+                0L
+            }
+        } ?: 0L
 
-
+    return FileStored(
+        title = name,
+        uri = uri.toString(),
+        mimeType = mimeType,
+        size = size,
+        createdAt = System.currentTimeMillis(),
+        updatedAt = System.currentTimeMillis(),
+        syncStatus = SyncStatus.LOCAL_ONLY
+    )
+}

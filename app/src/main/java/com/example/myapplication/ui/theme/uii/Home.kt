@@ -29,7 +29,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
@@ -37,18 +36,16 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.example.myapplication.ui.theme.viewModel.RoomViewModel
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,7 +56,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
+import androidx.core.content.FileProvider
 import com.composables.Video
 import com.example.myapplication.ui.theme.icons.Download
 import com.example.myapplication.ui.theme.icons.FilePdf
@@ -67,41 +64,20 @@ import com.example.myapplication.ui.theme.icons.Grid
 import com.example.myapplication.ui.theme.icons.ImageIcon
 import com.example.myapplication.ui.theme.icons.List_Show
 import com.example.myapplication.ui.theme.icons.Question
-import com.example.myapplication.ui.theme.icons.Solid_Folder
 import com.example.myapplication.ui.theme.icons.Star
 import com.example.myapplication.ui.theme.icons.StarSolid
-import com.example.myapplication.ui.theme.mod.FolderEntity
 import com.example.myapplication.ui.theme.models.FileStored
+import com.example.myapplication.ui.theme.models.SyncStatus
+import java.io.File
 
 
 @Composable
-fun Home(isStarred : Boolean,folderId : Long, roomViewModel: RoomViewModel,navController: NavController, onClick : (Long, Long) -> Unit) {
+fun Home(isStarred : Boolean,roomViewModel: RoomViewModel) {
     var showInGrid by remember { mutableStateOf(true) }
-    var navigateUp by remember { mutableStateOf(true) }
-    var folder by remember { mutableStateOf<FolderEntity?>(null) }
-    var ppid by remember { mutableStateOf<Long?>(null) }
+    val fileList by roomViewModel.fileList.collectAsState()
+    val searchFileList by roomViewModel.searchFileList.collectAsState()
 
-    LaunchedEffect(folderId) {
-        folder = roomViewModel.getFolderById(folderId)
-        roomViewModel.getFolders(folderId)
-        roomViewModel.getFiles(folderId)
-        ppid = roomViewModel.getFolderById(folderId)?.parentId
-    }
-    val orgfolderList by roomViewModel.folderList.observeAsState(emptyList())
-    val orgfileList by roomViewModel.fileList.observeAsState(emptyList())
 
-    var folderList : List<FolderEntity> by remember { mutableStateOf(emptyList()) }
-    var fileList : List<FileStored> by remember { mutableStateOf(emptyList()) }
-
-    LaunchedEffect(orgfolderList) {
-        folderList = orgfolderList
-    }
-    LaunchedEffect(orgfileList) {
-        fileList = orgfileList as List<FileStored>
-    }
-
-    val searchFolderList by roomViewModel.searchFolderList.observeAsState(emptyList())
-    val searchFileList by roomViewModel.searchFileList.observeAsState(emptyList())
 
     Column(
         modifier = Modifier
@@ -113,28 +89,7 @@ fun Home(isStarred : Boolean,folderId : Long, roomViewModel: RoomViewModel,navCo
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if(folderId == 1L && folderId != 2L){
-                Text(text = "Files", color = Color.White, fontSize = 18.sp)
-            }else{
-                Row {
-                    Icon(imageVector = Icons.Rounded.ArrowBack,
-                        contentDescription = "",
-                        tint = Color.LightGray,
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clickable {
-                                if (folderId == 2L) {
-                                    onClick(1, -1)
-                                } else {
-                                    folder?.parentId?.let { parentId ->
-                                        onClick(parentId, ppid ?: -1)
-                                    }
-                                }
-                            })
-                    Spacer(modifier = Modifier.width(12.dp))
-                    folder?.let { Text(text = it.folderName, color = Color.White, fontSize = 18.sp) }
-                }
-            }
+            Text(text = "Files", color = Color.White, fontSize = 18.sp)
             AnimatedContent(
                 targetState = showInGrid
             ) { target ->
@@ -155,27 +110,17 @@ fun Home(isStarred : Boolean,folderId : Long, roomViewModel: RoomViewModel,navCo
             }
         }
         LazyColumn {
-            val hasSearchResults = searchFileList.isNotEmpty() || searchFolderList.isNotEmpty()
+            val hasSearchResults = searchFileList.isNotEmpty()
             if(hasSearchResults){
                 if(!isStarred){
-                    items(searchFolderList, key = { "folder_${it.id}" }) { folder ->
-                        if(!folder.isDeleted){
-                            FolderList(folder, roomViewModel, onClick = { onClick(folder.id, folder.parentId ?: -1) })
-                        }
-                    }
                     items(searchFileList, key = { "file_${it?.id}" }) { file ->
                         if (file != null && !file.isDeleted) {
                             FileList(file, roomViewModel)
                         }
                     }
                 }else{
-                    items(searchFolderList){folder ->
-                        if(folder.isStarred && !folder.isDeleted){
-                            FolderList(folder, roomViewModel, onClick = { onClick(folder.id, folder.parentId ?: -1) })
-                        }
-                    }
                     items(searchFileList){file ->
-                        if (file != null&& !file.isDeleted)  {
+                        if (file != null && !file.isDeleted)  {
                             if(file.isStarred){
                                 FileList(file, roomViewModel)
                             }
@@ -184,22 +129,12 @@ fun Home(isStarred : Boolean,folderId : Long, roomViewModel: RoomViewModel,navCo
                 }
             }else{
                 if(!isStarred){
-                    items(folderList, key = { "folder_${it.id}" }) { folder ->
-                        if(!folder.isDeleted){
-                            FolderList(folder, roomViewModel, onClick = { onClick(folder.id, folder.parentId ?: -1);roomViewModel.search("",folderId) })
-                        }
-                    }
                     items(fileList, key = { "file_${it?.id}" }) { file ->
                         if (file != null && !file.isDeleted) {
                             FileList(file, roomViewModel)
                         }
                     }
                 }else{
-                    items(folderList){folder ->
-                        if(folder.isStarred && !folder.isDeleted){
-                            FolderList(folder, roomViewModel, onClick = { onClick(folder.id, folder.parentId ?: -1) })
-                        }
-                    }
                     items(fileList){file ->
                         if (file != null && !file.isDeleted) {
                             if(file.isStarred){
@@ -216,219 +151,22 @@ fun Home(isStarred : Boolean,folderId : Long, roomViewModel: RoomViewModel,navCo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FolderList(folder : FolderEntity,roomViewModel: RoomViewModel,onClick : () -> Unit) {
-    val context = LocalContext.current
-    var isStar by remember { mutableStateOf(folder.isStarred) }
-    var showDelete by remember { mutableStateOf(false) }
-    var showRename by remember { mutableStateOf(false) }
-    var rename by remember { mutableStateOf(folder.folderName) }
-    var showDropDownMenu by remember { mutableStateOf(false) }
-    val formattedTime = try {
-        val timeInMillis = folder.createdAt
-        DateFormat.format("hh:mm a", timeInMillis).toString()
-    } catch (e: Exception) {
-        "--:--"
-    }
-    Spacer(modifier = Modifier.height(16.dp))
-    Box(){
-        AnimatedVisibility(visible = true) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(20))
-                    .clickable {
-                        onClick()
-                    },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ){
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(imageVector = Solid_Folder,
-                        contentDescription = "",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(40.dp))
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(text = folder.folderName)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if(folder.isStarred){
-                                Icon(imageVector = StarSolid, tint = Color.Yellow,
-                                    contentDescription = "",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Text(text = "Created at   • $formattedTime", fontSize = 12.sp,color = Color.LightGray)
-                        }
-                    }
-                }
-                Box{
-                    Icon(imageVector = Icons.Rounded.MoreVert,
-                        contentDescription = "",
-                        tint = Color.LightGray,
-                        modifier = Modifier.clickable {
-                            showDropDownMenu = true
-                        }
-                    )
-                }
-            }
-        }
-        if(showRename){
-            BasicAlertDialog(
-                onDismissRequest = { showRename = false },
-                modifier = Modifier
-                    .width(400.dp)
-                    .height(180.dp)
-                    .clip(RoundedCornerShape(20))
-                    .background(Color(0Xff18191B))
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Column(
-                        modifier = Modifier.padding(15.dp)
-                    ) {
-                        Text(text = "Rename Folder")
-                        OutlinedTextField(
-                            onValueChange = { rename = it },
-                            value = rename,
-                            placeholder = {Text(text = "New title")}
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            TextButton(onClick = {
-                                showRename = false
-                            }) {
-                                Text(text = "Cancel")
-                            }
-                            TextButton(onClick = {
-                                val newFolder = folder.copy(folderName = rename)
-                                roomViewModel.updateFolder(newFolder) { success, message ->
-                                    if (!success) {
-                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        showRename = false
-                                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }) {
-                                Text(text = "Rename")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if(showDropDownMenu){
-            ModalBottomSheet(onDismissRequest = {showDropDownMenu = false}, modifier = Modifier.heightIn(min = 250.dp,max = 500.dp)) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    item{
-                        Column(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Text(text = folder.folderName,
-                                fontSize = 24.sp,
-                                modifier = Modifier.padding(10.dp),
-                                lineHeight = 30.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis)
-                            HorizontalDivider()
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Column(
-                                modifier = Modifier.padding(horizontal = 25.dp),
-                                verticalArrangement = Arrangement.spacedBy(18.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { showRename = true },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(imageVector = Icons.Rounded.Edit, contentDescription = "",modifier = Modifier.size(30.dp))
-                                    Spacer(modifier = Modifier.width(18.dp))
-                                    Text(text = "Rename", fontSize = 26.sp)
-                                }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            roomViewModel.deleteFolder(folder)
-                                            Toast.makeText(
-                                                context,
-                                                "Folder Deleted Permanently",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(imageVector = Icons.Rounded.Delete, contentDescription = "",modifier = Modifier.size(30.dp))
-                                    Spacer(modifier = Modifier.width(18.dp))
-                                    Text(text = "Delete",fontSize = 26.sp)
-                                }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            isStar = !isStar
-                                            val newFolder = folder.copy(isStarred = isStar)
-                                            roomViewModel.updateFolder(
-                                                newFolder,
-                                                onResult = {success, message ->}
-                                            )
-                                        },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AnimatedContent(isStar) {
-                                            target ->
-                                        when(target){
-                                            false -> Row{
-                                                Icon(imageVector = Star, contentDescription = "",modifier = Modifier.size(30.dp))
-                                                Spacer(modifier = Modifier.width(18.dp))
-                                                Text(text = "Starred",fontSize = 26.sp)
-                                            }
-                                            true -> Row{
-                                                Icon(imageVector = StarSolid, contentDescription = "", tint = Color.Yellow,modifier = Modifier.size(30.dp))
-                                                Spacer(modifier = Modifier.width(18.dp))
-                                                Text(text = "Starred",fontSize = 26.sp)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
     var isStar by remember { mutableStateOf(file.isStarred) }
     var rename by remember { mutableStateOf(file.title) }
     var showRename by remember { mutableStateOf(false) }
-    val fileType by remember { mutableStateOf(file.fileType) }
+    val fileType by remember { mutableStateOf(file.mimeType) }
     var showDropDownMenu by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val formattedTime = try {
-        val timeInMillis = file.date
+        val timeInMillis = file.createdAt
         DateFormat.format("hh:mm a", timeInMillis).toString()
     } catch (e: Exception) {
         "--:--"
     }
+    Log.d("OPEN", "URI = ${file.uri}")
     Spacer(modifier = Modifier.height(16.dp))
-    Box(){
+    Box{
         AnimatedVisibility(visible = true,
             enter = fadeIn() + slideInVertically()
         ) {
@@ -438,13 +176,26 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                     .clip(RoundedCornerShape(20))
                     .clickable {
                         try {
-                            val fileUri = Uri.parse(file.path)
+                            val localFile = File(file.uri)
+
+                            Log.d(
+                                "OPEN",
+                                "exists=${localFile.exists()} path=${localFile.absolutePath}"
+                            )
+
+                            val fileUri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.provider",
+                                localFile
+                            )
 
                             val intent = Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(fileUri, file.fileType)
+                                setDataAndType(fileUri, file.mimeType)
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
-                            roomViewModel.search("", 0)
+
+                            context.startActivity(intent)
+                            roomViewModel.search("")
                             context.startActivity(intent)
                         } catch (e: Exception) {
                             Toast.makeText(
@@ -519,13 +270,17 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                                 )
                             }
                             Text(text = "Uploaded at   • $formattedTime", fontSize = 12.sp, color = Color.LightGray)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            if (file.syncStatus != SyncStatus.SYNCED) {
+                                Icon(
+                                    imageVector = MaterialIconsSync_disabled,
+                                    contentDescription = null,
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
                         }
                     }
-                }
-                if(!file.isSynced){
-                    Icon(imageVector = MaterialIconsSync_disabled,
-                        contentDescription = "", tint = Color.Red,
-                        modifier = Modifier.size(20.dp))
                 }
                 Box(
                     modifier = Modifier
@@ -533,7 +288,7 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                     Icon(imageVector = Icons.Rounded.MoreVert,
                         contentDescription = "",
                         tint = Color.LightGray,
-                        modifier = Modifier.clickable {
+                        modifier = Modifier.clip(RoundedCornerShape(100)).clickable {
                             showDropDownMenu = true
                         }
                     )
@@ -573,13 +328,9 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                                 Text(text = "Cancel")
                             }
                             TextButton(onClick = {
-                                val newFile = FileStored(
-                                    id = file.id,
+                                val newFile = file.copy(
                                     title = rename,
-                                    folderId = file.folderId,
-                                    fileType = file.fileType,
-                                    path = file.path,
-                                    isStarred = file.isStarred
+                                    updatedAt = System.currentTimeMillis()
                                 )
                                 roomViewModel.updateFile(newFile) { success, message ->
                                     if (!success) {
@@ -632,7 +383,7 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            roomViewModel.deleteFile(file)
+                                            roomViewModel.moveToTrash(file.id)
                                         },
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -643,7 +394,7 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { shareFile(context, file.path, file.fileType) },
+                                        .clickable { shareFile(context, file.uri, file.mimeType) },
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(imageVector = Icons.Rounded.Share, contentDescription = "",modifier = Modifier.size(30.dp))
@@ -663,11 +414,11 @@ fun FileList(file : FileStored,roomViewModel: RoomViewModel) {
                                         .fillMaxWidth()
                                         .clickable {
                                             isStar = !isStar
-                                            file.isStarred = !file.isStarred
-                                            roomViewModel.updateFile(
-                                                file,
-                                                onResult = { success, message -> }
+                                            val updatedFile = file.copy(
+                                                isStarred = !file.isStarred,
+                                                updatedAt = System.currentTimeMillis()
                                             )
+                                            roomViewModel.updateFile(updatedFile) { _, _ -> }
                                         },
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {

@@ -61,6 +61,14 @@ kapt {
 dependencies {
     // ... rest of your dependencies remain the same
 
+    implementation("androidx.work:work-runtime-ktx:2.10.2")
+
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
 
     implementation("com.google.firebase:firebase-auth-ktx")
@@ -75,6 +83,8 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    implementation(libs.androidx.foundation.layout.android)
+    implementation(libs.androidx.foundation.layout.android)
     kapt(libs.room.compiler)
     implementation(libs.room.ktx)
 
