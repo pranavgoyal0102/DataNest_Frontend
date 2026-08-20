@@ -2,13 +2,16 @@ package com.example.myapplication.ui.theme.room
 
 import android.content.Context
 import android.util.Log
+import com.example.myapplication.ui.theme.dto.FileResponse
 import com.example.myapplication.ui.theme.models.DeleteResult
+import com.example.myapplication.ui.theme.models.DeltaResult
 import com.example.myapplication.ui.theme.models.FileStored
 import com.example.myapplication.ui.theme.models.SyncResult
 import com.example.myapplication.ui.theme.models.SyncStatus
 import com.example.myapplication.ui.theme.models.UpdateResult
 import com.example.myapplication.ui.theme.network.FileDownloader
 import com.example.myapplication.ui.theme.network.FileRemoteRepository
+import com.example.myapplication.ui.theme.worker.SyncCursorStore
 
 class SyncRepo(
 
@@ -19,107 +22,237 @@ class SyncRepo(
     private val remoteRepo: FileRemoteRepository
 ){
 
-    suspend fun downloadCloudFiles() {
+    /**
+     * Pulls everything changed since the stored cursor, a page at a time.
+     *
+     * Nothing is ever removed here. A row with isDeleted = true is
+     * trashed, not purged, and has to stay so the trash screen can show
+     * it; a file purged server-side just stops appearing in the feed,
+     * which is indistinguishable from it being unchanged. A device
+     * offline across a purge therefore keeps its copy — known gap, and
+     * closing it needs the server to emit tombstones.
+     */
+    suspend fun deltaSync() {
 
-        val remoteFiles =
-            remoteRepo.downloadFiles()
+        val store = SyncCursorStore(context)
 
-        remoteFiles.forEach { remote ->
+        var cursor = store.cursor
 
-            val existing =
-                localRepo.getFileByRemoteId(
-                    remote.id
+        var pages = 0
+
+        Log.d(
+            "SYNC",
+            "Delta sync from cursor=${cursor ?: "<none>"}"
+        )
+
+        while (pages < MAX_PAGES) {
+
+            val page =
+                when (
+                    val result =
+                        remoteRepo.syncDelta(
+                            cursor,
+                            PAGE_SIZE
+                        )
+                ) {
+
+                    is DeltaResult.Page -> result.page
+
+                    is DeltaResult.HttpError -> {
+
+                        // Leave the cursor alone: advancing past rows
+                        // that were never applied would skip them for
+                        // good. The next run retries from here.
+                        Log.e(
+                            "SYNC",
+                            "Delta page rejected at cursor=$cursor: " +
+                                    "${result.detail}"
+                        )
+
+                        return
+                    }
+
+                    is DeltaResult.Transport -> {
+
+                        Log.e(
+                            "SYNC",
+                            "Delta page did not reach the server at " +
+                                    "cursor=$cursor: ${result.message}"
+                        )
+
+                        return
+                    }
+                }
+
+            // Null means the payload did not have the shape we expect —
+            // a changed envelope, a proxy answering in HTML. Surface it
+            // and leave the cursor be; treating it as an empty page
+            // would advance past rows that were never applied.
+            val rows =
+                page.changes
+                    ?: run {
+
+                        Log.e(
+                            "SYNC",
+                            "Delta page at cursor=$cursor had no " +
+                                    "changes list, stopping"
+                        )
+
+                        return
+                    }
+
+            rows.forEach { remote ->
+                applyRemote(remote)
+            }
+
+            pages++
+
+            val next = page.cursor
+
+            if (next != null && next != cursor) {
+
+                // Persisted only after the page is applied. A crash in
+                // between re-fetches a page that is already in, and
+                // applying it twice lands on the same state.
+                store.cursor = next
+
+                cursor = next
+
+            } else if (page.hasMore) {
+
+                // Same cursor handed back with more promised, or none at
+                // all: following it would re-request this page forever.
+                // Compared for equality only — the value stays opaque.
+                Log.e(
+                    "SYNC",
+                    "Delta cursor did not change at $cursor " +
+                            "(${rows.size} rows, hasMore), stopping"
                 )
 
-            if (existing == null) {
-                val downloader =
-                    FileDownloader(
-                        context
-                    )
+                return
+            }
 
-                val localPath =
-                    downloader.downloadFile(
+            Log.d(
+                "SYNC",
+                "Applied ${rows.size} rows, " +
+                        "cursor now $cursor, hasMore=${page.hasMore}"
+            )
 
-                        remote.cloudUrl,
+            if (!page.hasMore) {
+                return
+            }
+        }
 
-                        remote.title
-                    )
+        Log.e(
+            "SYNC",
+            "Delta sync stopped at $MAX_PAGES pages, " +
+                    "cursor $cursor — more remains"
+        )
+    }
 
-                localRepo.saveFile(
+    /**
+     * Folds one remote row into the local table. Unchanged in substance
+     * from the full-list pull this replaced: a local edit still in
+     * flight keeps its fields and takes only the server's version.
+     */
+    private suspend fun applyRemote(
+        remote: FileResponse
+    ) {
 
-                    FileStored(
-                        remoteId = remote.id,
+        val existing =
+            localRepo.getFileByRemoteId(
+                remote.id
+            )
+
+        if (existing == null) {
+
+            val downloader =
+                FileDownloader(
+                    context
+                )
+
+            val localPath =
+                downloader.downloadFile(
+
+                    remote.cloudUrl,
+
+                    remote.title
+                )
+
+            localRepo.saveFile(
+
+                FileStored(
+                    remoteId = remote.id,
+                    title = remote.title,
+                    uri = localPath ?: "",
+                    mimeType = remote.mimeType,
+                    size = remote.size,
+                    isDeleted = remote.isDeleted,
+                    isStarred = remote.isStarred,
+                    createdAt = remote.createdAt,
+                    updatedAt = remote.updatedAt,
+                    version = remote.version,
+                    syncStatus = SyncStatus.SYNCED
+                )
+            )
+
+            Log.d(
+                "SYNC",
+                "Downloaded ${remote.title}"
+            )
+
+        } else {
+
+            if (
+                existing.syncStatus == SyncStatus.SYNCED &&
+                remote.updatedAt > existing.updatedAt
+            ) {
+
+                localRepo.updateFile(
+
+                    existing.copy(
+
                         title = remote.title,
-                        uri = localPath ?: "",
+
                         mimeType = remote.mimeType,
+
                         size = remote.size,
+
                         isDeleted = remote.isDeleted,
+
                         isStarred = remote.isStarred,
-                        createdAt = remote.createdAt,
+
                         updatedAt = remote.updatedAt,
+
                         version = remote.version,
-                        syncStatus = SyncStatus.SYNCED
+
+                        syncStatus =
+                        SyncStatus.SYNCED
                     )
                 )
 
                 Log.d(
                     "SYNC",
-                    "Downloaded ${remote.title}"
+                    "Updated from cloud ${remote.title}"
                 )
 
             } else {
 
-                if (
-                    existing.syncStatus == SyncStatus.SYNCED &&
-                    remote.updatedAt > existing.updatedAt
-                ) {
+                // Local edit is pending, so its fields stay put — but
+                // take the server's version anyway, otherwise the
+                // eventual PATCH goes out stale and 409s.
+                if (remote.version != existing.version) {
 
-                    localRepo.updateFile(
-
-                        existing.copy(
-
-                            title = remote.title,
-
-                            mimeType = remote.mimeType,
-
-                            size = remote.size,
-
-                            isDeleted = remote.isDeleted,
-
-                            isStarred = remote.isStarred,
-
-                            updatedAt = remote.updatedAt,
-
-                            version = remote.version,
-
-                            syncStatus =
-                            SyncStatus.SYNCED
-                        )
-                    )
-
-                    Log.d(
-                        "SYNC",
-                        "Updated from cloud ${remote.title}"
-                    )
-
-                } else {
-
-                    // Local edit is pending, so its fields stay put — but
-                    // take the server's version anyway, otherwise the
-                    // eventual PATCH goes out stale and 409s.
-                    if (remote.version != existing.version) {
-
-                        localRepo.updateVersion(
-                            existing.id,
-                            remote.version
-                        )
-                    }
-
-                    Log.d(
-                        "SYNC",
-                        "Skipped ${remote.title}"
+                    localRepo.updateVersion(
+                        existing.id,
+                        remote.version
                     )
                 }
+
+                Log.d(
+                    "SYNC",
+                    "Skipped ${remote.title}"
+                )
             }
         }
     }
@@ -131,6 +264,14 @@ class SyncRepo(
         syncUpdatedFiles()
 
         syncPurgedFiles()
+    }
+
+    private companion object {
+
+        const val PAGE_SIZE = 200
+
+        /** Bounds a server that never stops saying hasMore. */
+        const val MAX_PAGES = 50
     }
 
     private suspend fun uploadNewFiles() {

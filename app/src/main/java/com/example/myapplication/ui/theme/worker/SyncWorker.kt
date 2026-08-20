@@ -45,21 +45,25 @@ class SyncWorker(
 
             syncRepository.syncAllFiles()
 
-            val localCount =
-                fileRepository.getFilesCount()
-
-            if (
-                syncMode == MODE_FULL ||
-                localCount == 0
-            ) {
+            // Runs every time now. The delta is cheap when nothing has
+            // changed — one request that comes back empty — and gating
+            // it the way the full-list pull was gated would mean an
+            // incremental sync never saw remote edits at all.
+            //
+            // MODE_FULL still means something: it drops the cursor, so
+            // the next pull starts from scratch.
+            if (syncMode == MODE_FULL) {
 
                 Log.d(
                     "SYNC_WORKER",
-                    "Downloading cloud files"
+                    "Full mode, resetting delta cursor"
                 )
 
-                syncRepository.downloadCloudFiles()
+                SyncCursorStore(applicationContext)
+                    .clear()
             }
+
+            syncRepository.deltaSync()
 
             Log.d("SYNC_WORKER", "Sync completed in $syncMode mode")
             Result.success()

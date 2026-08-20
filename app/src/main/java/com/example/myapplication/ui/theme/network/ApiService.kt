@@ -2,6 +2,7 @@ package com.example.myapplication.ui.theme.network
 
 import com.example.myapplication.ui.theme.dto.ApiResponse
 import com.example.myapplication.ui.theme.dto.FileResponse
+import com.example.myapplication.ui.theme.dto.SyncPageResponse
 import com.example.myapplication.ui.theme.dto.UpdateFileRequest
 import retrofit2.Response
 import retrofit2.http.Body
@@ -35,6 +36,23 @@ interface ApiService {
 
     @GET("api/files")
     suspend fun getFiles(): ApiResponse<List<FileResponse>>
+
+    /**
+     * One page of rows changed since [cursor], which is the cursor off
+     * the previous page. Null on the first sync — Retrofit drops a null
+     * query param, and no cursor asks for everything. Enveloped like
+     * every other endpoint, so the page itself is under `data`.
+     */
+    @GET("api/files/sync")
+    suspend fun syncDelta(
+
+        @Query("cursor")
+        cursor: String?,
+
+        @Query("limit")
+        limit: Int
+
+    ): Response<ApiResponse<SyncPageResponse>>
 
     /**
      * Wrapped in [Response] so a 409 can be read off the error body —

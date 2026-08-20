@@ -1,6 +1,7 @@
 package com.example.myapplication.ui.theme.models
 
 import com.example.myapplication.ui.theme.dto.FileResponse
+import com.example.myapplication.ui.theme.dto.SyncPageResponse
 
 sealed class SyncResult {
 
@@ -57,6 +58,26 @@ data class HttpErrorDetail(
 
         return "HTTP $code$message body=${body ?: "<empty>"}"
     }
+}
+
+/**
+ * One page of the delta feed. Kept distinct from an empty page: a
+ * failure must not advance the cursor, or the rows it covered are
+ * skipped for good.
+ */
+sealed class DeltaResult {
+
+    data class Page(
+        val page: SyncPageResponse
+    ) : DeltaResult()
+
+    data class HttpError(
+        val detail: HttpErrorDetail
+    ) : DeltaResult()
+
+    data class Transport(
+        val message: String
+    ) : DeltaResult()
 }
 
 sealed class DeleteResult {

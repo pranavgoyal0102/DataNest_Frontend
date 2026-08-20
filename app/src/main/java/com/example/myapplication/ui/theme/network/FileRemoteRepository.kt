@@ -6,6 +6,7 @@ import com.example.myapplication.ui.theme.dto.ApiResponse
 import com.example.myapplication.ui.theme.dto.FileResponse
 import com.example.myapplication.ui.theme.dto.UpdateFileRequest
 import com.example.myapplication.ui.theme.models.DeleteResult
+import com.example.myapplication.ui.theme.models.DeltaResult
 import com.example.myapplication.ui.theme.models.FileStored
 import com.example.myapplication.ui.theme.models.HttpErrorDetail
 import com.example.myapplication.ui.theme.models.SyncResult
@@ -113,6 +114,72 @@ class FileRemoteRepository {
             )
 
             emptyList()
+        }
+    }
+
+    /**
+     * Fetches one page of the delta feed. [cursor] is the previous
+     * page's cursor, or null on a first sync, which asks for everything.
+     */
+    suspend fun syncDelta(
+        cursor: String?,
+        limit: Int
+    ): DeltaResult {
+
+        return try {
+
+            val response =
+                RetrofitInstance.api.syncDelta(
+                    cursor,
+                    limit
+                )
+
+            val body = response.body()
+
+            val page = body?.data
+
+            if (
+                response.isSuccessful &&
+                body?.success == true &&
+                page != null
+            ) {
+
+                DeltaResult.Page(page)
+
+            } else if (response.isSuccessful) {
+
+                // 2xx carrying success = false, or an envelope with no
+                // data. Reported with the code so it is not mistaken
+                // for a transport fault.
+                DeltaResult.HttpError(
+                    HttpErrorDetail(
+                        code = response.code(),
+                        serverMessage = body?.message,
+                        body = null
+                    )
+                )
+
+            } else {
+
+                DeltaResult.HttpError(
+                    errorDetail(
+                        response.code(),
+                        readErrorBody(response)
+                    )
+                )
+            }
+
+        } catch (e: Exception) {
+
+            Log.e(
+                "SYNC",
+                "Delta request failed at cursor=$cursor",
+                e
+            )
+
+            DeltaResult.Transport(
+                "${e.javaClass.simpleName}: ${e.message ?: "no message"}"
+            )
         }
     }
 
@@ -314,17 +381,7 @@ class FileRemoteRepository {
 
         // Read once and reuse — the error body is a one-shot stream, so
         // parsing it after building the detail would come back empty.
-        val raw =
-            try {
-                response.errorBody()?.string()
-            } catch (e: Exception) {
-                Log.e(
-                    "SYNC",
-                    "Could not read error body",
-                    e
-                )
-                null
-            }
+        val raw = readErrorBody(response)
 
         val detail =
             errorDetail(
@@ -342,6 +399,23 @@ class FileRemoteRepository {
             404 -> DeleteResult.NotFound(detail)
 
             else -> DeleteResult.HttpError(detail)
+        }
+    }
+
+    /** One-shot: the stream is spent once read, so callers must reuse. */
+    private fun readErrorBody(
+        response: Response<*>
+    ): String? {
+
+        return try {
+            response.errorBody()?.string()
+        } catch (e: Exception) {
+            Log.e(
+                "SYNC",
+                "Could not read error body",
+                e
+            )
+            null
         }
     }
 
