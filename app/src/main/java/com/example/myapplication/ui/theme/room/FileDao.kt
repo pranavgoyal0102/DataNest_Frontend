@@ -195,20 +195,30 @@ interface FileDao {
 
     @Query("""
     SELECT * FROM files
-    WHERE syncStatus = 'PENDING_DELETE'
+    WHERE syncStatus = 'PENDING_PURGE'
 """)
-    suspend fun getPendingDeleteFiles(): List<FileStored>
+    suspend fun getPendingPurgeFiles(): List<FileStored>
 
     @Query("""
     UPDATE files
-    SET remoteId = :remoteId
+    SET remoteId = :remoteId,
+        version = :version
     WHERE id = :id
 """)
-
-
     suspend fun updateRemoteId(
         id: Long,
-        remoteId: String
+        remoteId: String,
+        version: Long
+    )
+
+    @Query("""
+    UPDATE files
+    SET version = :version
+    WHERE id = :id
+""")
+    suspend fun updateVersion(
+        id: Long,
+        version: Long
     )
 
     @Delete

@@ -87,18 +87,30 @@ class FileRepository(
     }
 
 
-    suspend fun getPendingDeleteFiles(): List<FileStored> {
-        return fileDao.getPendingDeleteFiles()
+    suspend fun getPendingPurgeFiles(): List<FileStored> {
+        return fileDao.getPendingPurgeFiles()
     }
 
 
     suspend fun updateRemoteId(
         id: Long,
-        remoteId: String
+        remoteId: String,
+        version: Long
     ) {
         fileDao.updateRemoteId(
             id,
-            remoteId
+            remoteId,
+            version
+        )
+    }
+
+    suspend fun updateVersion(
+        id: Long,
+        version: Long
+    ) {
+        fileDao.updateVersion(
+            id,
+            version
         )
     }
 

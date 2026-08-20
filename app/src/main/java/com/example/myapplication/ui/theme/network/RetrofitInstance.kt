@@ -8,11 +8,13 @@ import java.util.concurrent.TimeUnit
 object RetrofitInstance {
 
     private const val BASE_URL =
-        "http://192.168.1.9:8080/"
+        "http://172.16.39.122:8080/"
 
     private val client by lazy {
 
         OkHttpClient.Builder()
+            .addInterceptor(AuthInterceptor())
+            .authenticator(TokenAuthenticator())
             .connectTimeout(60, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.MINUTES)
             .writeTimeout(5, TimeUnit.MINUTES)

@@ -18,5 +18,7 @@ data class FileResponse(
 
     val createdAt: Long,
 
-    val updatedAt: Long
+    val updatedAt: Long,
+
+    val version: Long
 )

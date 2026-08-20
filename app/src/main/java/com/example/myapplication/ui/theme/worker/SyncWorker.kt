@@ -43,7 +43,7 @@ class SyncWorker(
                     remoteRepository
                 )
 
-            syncRepository.syncAllFiles(user.uid)
+            syncRepository.syncAllFiles()
 
             val localCount =
                 fileRepository.getFilesCount()
@@ -58,9 +58,7 @@ class SyncWorker(
                     "Downloading cloud files"
                 )
 
-                syncRepository.downloadCloudFiles(
-                    user.uid
-                )
+                syncRepository.downloadCloudFiles()
             }
 
             Log.d("SYNC_WORKER", "Sync completed in $syncMode mode")

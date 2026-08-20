@@ -278,7 +278,7 @@ private fun TrashFileItem(
 
                                 showMenu = false
 
-                                roomViewModel.deleteFile(
+                                roomViewModel.purgeFile(
                                     file
                                 )
                             }

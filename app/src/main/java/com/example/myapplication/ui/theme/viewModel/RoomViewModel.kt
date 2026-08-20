@@ -82,23 +82,32 @@ class RoomViewModel(
         }
     }
 
-    fun deleteFile(file: FileStored) {
+    /**
+     * Explicit "delete permanently" from the trash screen. Use
+     * [moveToTrash] for an ordinary delete.
+     */
+    fun purgeFile(file: FileStored) {
         viewModelScope.launch {
 
-            if (file != null) {
+            // Re-read rather than writing back the row the UI is
+            // holding: that copy predates anything a sync in flight
+            // wrote, so persisting it would roll the version — and a
+            // just-synced trash — back to a stale value.
+            val current =
+                repository.getFileById(file.id)
+                    ?: return@launch
 
-                repository.updateFile(
+            repository.updateFile(
 
-                    file.copy(
+                current.copy(
 
-                        updatedAt =
-                        System.currentTimeMillis(),
+                    updatedAt =
+                    System.currentTimeMillis(),
 
-                        syncStatus =
-                        SyncStatus.PENDING_DELETE
-                    )
+                    syncStatus =
+                    SyncStatus.PENDING_PURGE
                 )
-            }
+            )
         }
     }
 
@@ -223,17 +232,14 @@ class RoomViewModel(
 
     fun syncAllFiles() {
 
-        val user =
-            FirebaseAuth
-                .getInstance()
-                .currentUser
-                ?: return
+        FirebaseAuth
+            .getInstance()
+            .currentUser
+            ?: return
 
         viewModelScope.launch {
 
-            syncRepository.syncAllFiles(
-                user.uid
-            )
+            syncRepository.syncAllFiles()
         }
     }
 }

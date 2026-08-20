@@ -1,20 +1,25 @@
 package com.example.myapplication.ui.theme.network
 
 import com.example.myapplication.ui.theme.dto.ApiResponse
-import com.example.myapplication.ui.theme.dto.CreateFileRequest
 import com.example.myapplication.ui.theme.dto.FileResponse
 import com.example.myapplication.ui.theme.dto.UpdateFileRequest
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
-import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.http.Multipart
 import retrofit2.http.Part
 
+/**
+ * Every call is authenticated by [AuthInterceptor]; the server derives the
+ * uid from the verified token, so nothing here passes firebaseUid.
+ */
 interface ApiService {
 
     @Multipart
@@ -23,23 +28,20 @@ interface ApiService {
 
         @Part file: MultipartBody.Part,
 
-        @Part("firebaseUid")
-        firebaseUid: RequestBody,
-
         @Part("isStarred")
         isStarred: RequestBody
 
     ): ApiResponse<FileResponse>
 
-    @GET("api/files/{uid}")
-    suspend fun getFiles(
+    @GET("api/files")
+    suspend fun getFiles(): ApiResponse<List<FileResponse>>
 
-        @Path("uid")
-        uid: String
-
-    ): ApiResponse<List<FileResponse>>
-
-    @PUT("api/files/{id}")
+    /**
+     * Wrapped in [Response] so a 409 can be read off the error body —
+     * the server returns its current [FileResponse] there on a stale
+     * version, which is enough to reconcile without a re-fetch.
+     */
+    @PATCH("api/files/{id}")
     suspend fun updateFile(
 
         @Path("id")
@@ -47,18 +49,54 @@ interface ApiService {
 
         @Body request: UpdateFileRequest
 
-    ): ApiResponse<Unit>
+    ): Response<ApiResponse<FileResponse>>
 
-    @DELETE("api/files/{uid}/{id}")
-    suspend fun deleteFile(
-
-        @Path("uid")
-        uid: String,
+    /**
+     * Soft delete — moves the file to trash. Wrapped in [Response] so a
+     * rejection keeps its status code and body instead of arriving as a
+     * bare HttpException.
+     *
+     * Returns the stored file so the caller can pick up the version the
+     * server bumped to; omitting [version] is a 400.
+     */
+    @POST("api/files/{id}/trash")
+    suspend fun trashFile(
 
         @Path("id")
-        remoteId: String
+        id: String,
 
-    ): ApiResponse<Unit>
+        @Query("version")
+        version: Long
 
+    ): Response<ApiResponse<FileResponse>>
+
+    /**
+     * Lifts a file back out of trash. Same version rules as [trashFile].
+     */
+    @POST("api/files/{id}/restore")
+    suspend fun restoreFile(
+
+        @Path("id")
+        id: String,
+
+        @Query("version")
+        version: Long
+
+    ): Response<ApiResponse<FileResponse>>
+
+    /**
+     * Hard delete — destroys the file outright, so this is never the
+     * call for an ordinary delete. [trashFile] is the soft one.
+     */
+    @DELETE("api/files/{id}")
+    suspend fun deleteFilePermanently(
+
+        @Path("id")
+        id: String,
+
+        @Query("version")
+        version: Long
+
+    ): Response<ApiResponse<Unit>>
 
 }

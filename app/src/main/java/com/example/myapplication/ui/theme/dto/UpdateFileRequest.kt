@@ -6,6 +6,8 @@ data class UpdateFileRequest(
 
     val isDeleted: Boolean,
 
-    val isStarred: Boolean
+    val isStarred: Boolean,
+
+    val version: Long
 
 )
