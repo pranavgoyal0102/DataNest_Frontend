@@ -6,10 +6,14 @@ plugins {
 }
 
 android {
-    namespace = "com.example.myapplication"
+    namespace = "com.pranavgoyal.datanest"
     compileSdk = 35
 
     defaultConfig {
+        // Deliberately still the old id: it is the identity Firebase
+        // keys on, and google-services.json registers only this one.
+        // Changing it means registering a new Android app in the
+        // console with the signing SHA-1 first.
         applicationId = "com.example.myapplication"
         minSdk = 24
         targetSdk = 35

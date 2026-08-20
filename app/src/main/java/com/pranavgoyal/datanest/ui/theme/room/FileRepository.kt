@@ -1,0 +1,118 @@
+package com.pranavgoyal.datanest.ui.theme.room
+
+import android.util.Log
+import com.pranavgoyal.datanest.ui.theme.models.FileStored
+import kotlinx.coroutines.flow.Flow
+
+class FileRepository(
+    private val fileDao: FileDao
+) {
+
+    suspend fun getPendingUploadFiles() =
+        fileDao.getPendingUploadFiles()
+
+    suspend fun saveFile(
+        file: FileStored
+    ): Long {
+
+        Log.d(
+            "ROOM",
+            "Saving ${file.title}"
+        )
+
+        return fileDao.insertFile(file)
+    }
+
+    fun getFiles(): Flow<List<FileStored>> {
+        return fileDao.getFiles()
+    }
+
+    fun searchFiles(query: String): Flow<List<FileStored>> {
+        return fileDao.searchFiles(query)
+    }
+
+    fun getDeletedFiles(): Flow<List<FileStored>> {
+        return fileDao.getDeletedFiles()
+    }
+
+    suspend fun getFileById(id: Long): FileStored? {
+        return fileDao.getFileById(id)
+    }
+
+    suspend fun getFileByName(name: String): FileStored? {
+        return fileDao.getFileByName(name)
+    }
+
+
+    suspend fun updateFile(file: FileStored) {
+        fileDao.updateFile(file)
+    }
+
+    suspend fun updateSyncStatus(
+        id: Long,
+        status: String
+    ) {
+
+        Log.d(
+            "SYNC",
+            "File $id -> $status"
+        )
+
+        fileDao.updateSyncStatus(
+            id,
+            status.toString()
+        )
+    }
+
+    suspend fun getFilesCount(): Int {
+        return fileDao.getFilesCount()
+    }
+
+    suspend fun getFileByRemoteId(remoteId: String): FileStored? =
+        fileDao.getFileByRemoteId(remoteId)
+
+    suspend fun getLocalOnlyFiles(): List<FileStored> {
+        return fileDao.getLocalOnlyFiles()
+    }
+
+
+    suspend fun getPendingUpdateFiles(): List<FileStored> {
+        return fileDao.getPendingUpdateFiles()
+    }
+
+
+    suspend fun getPendingPurgeFiles(): List<FileStored> {
+        return fileDao.getPendingPurgeFiles()
+    }
+
+
+    suspend fun updateRemoteId(
+        id: Long,
+        remoteId: String,
+        version: Long
+    ) {
+        fileDao.updateRemoteId(
+            id,
+            remoteId,
+            version
+        )
+    }
+
+    suspend fun updateVersion(
+        id: Long,
+        version: Long
+    ) {
+        fileDao.updateVersion(
+            id,
+            version
+        )
+    }
+
+    suspend fun deleteFile(
+        file: FileStored
+    ) {
+        fileDao.deleteFile(file)
+    }
+
+
+}
