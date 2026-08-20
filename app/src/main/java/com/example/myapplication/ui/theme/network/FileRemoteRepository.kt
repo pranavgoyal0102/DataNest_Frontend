@@ -96,27 +96,6 @@ class FileRemoteRepository {
 
 
 
-    suspend fun downloadFiles(): List<FileResponse> {
-
-        return try {
-
-            val response =
-                RetrofitInstance.api.getFiles()
-
-            response.data ?: emptyList()
-
-        } catch (e: Exception) {
-
-            Log.e(
-                "SYNC",
-                "Download failed",
-                e
-            )
-
-            emptyList()
-        }
-    }
-
     /**
      * Fetches one page of the delta feed. [cursor] is the previous
      * page's cursor, or null on a first sync, which asks for everything.

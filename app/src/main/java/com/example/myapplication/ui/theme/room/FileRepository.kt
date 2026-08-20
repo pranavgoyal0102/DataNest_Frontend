@@ -15,12 +15,6 @@ class FileRepository(
         file: FileStored
     ): Long {
 
-        Log.e(
-            "FILE_SOURCE",
-            "Saving ${file.title}",
-            Exception("TRACE")
-        )
-
         Log.d(
             "ROOM",
             "Saving ${file.title}"

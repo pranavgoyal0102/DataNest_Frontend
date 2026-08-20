@@ -34,9 +34,6 @@ interface ApiService {
 
     ): ApiResponse<FileResponse>
 
-    @GET("api/files")
-    suspend fun getFiles(): ApiResponse<List<FileResponse>>
-
     /**
      * One page of rows changed since [cursor], which is the cursor off
      * the previous page. Null on the first sync — Retrofit drops a null
