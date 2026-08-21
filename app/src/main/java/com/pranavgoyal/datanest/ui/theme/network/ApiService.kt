@@ -23,6 +23,12 @@ import retrofit2.http.Part
  */
 interface ApiService {
 
+    /**
+     * Wrapped in [Response] so a rejection keeps its status code instead
+     * of arriving as a bare HttpException — the one that matters here is
+     * 413, which is how the server turns down a file over its
+     * max-file-size.
+     */
     @Multipart
     @POST("api/files/upload")
     suspend fun uploadFile(
@@ -32,7 +38,7 @@ interface ApiService {
         @Part("isStarred")
         isStarred: RequestBody
 
-    ): ApiResponse<FileResponse>
+    ): Response<ApiResponse<FileResponse>>
 
     /**
      * One page of rows changed since [cursor], which is the cursor off

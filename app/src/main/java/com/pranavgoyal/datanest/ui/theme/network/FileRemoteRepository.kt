@@ -29,22 +29,29 @@ class FileRemoteRepository {
         file: FileStored
     ): SyncResult {
 
+        // Cheap pre-flight, so an oversized file fails at once instead of
+        // after pushing the whole body up only to be turned down. The
+        // server stays the authority — size is 0 when the picker could
+        // not report one, and the multipart envelope adds a little on top
+        // — so the 413 branch below is still the one that decides.
+        if (file.size > MAX_UPLOAD_BYTES) {
+
+            return SyncResult.Error(
+                "${file.title} is ${file.size / BYTES_PER_MB}MB, over the " +
+                        "${MAX_UPLOAD_BYTES / BYTES_PER_MB}MB upload limit"
+            )
+        }
+
         return try {
 
-            val uri = Uri.parse(file.uri)
-
-            val inputStream =
-                context.contentResolver.openInputStream(uri)
-                    ?: return SyncResult.Error("Cannot open file")
-
-            val bytes =
-                inputStream.readBytes()
-
-            inputStream.close()
-
+            // Streamed off the ContentResolver rather than read into a
+            // ByteArray, which OOMed on large files.
             val requestBody =
-                bytes.toRequestBody(
-                    file.mimeType.toMediaTypeOrNull()
+                ContentUriRequestBody(
+                    context = context,
+                    uri = Uri.parse(file.uri),
+                    mediaType = file.mimeType.toMediaTypeOrNull(),
+                    declaredSize = file.size
                 )
 
             val multipart =
@@ -67,10 +74,12 @@ class FileRemoteRepository {
                     starredBody
                 )
 
-            if (response.success) {
+            val body = response.body()
+
+            if (response.isSuccessful && body?.success == true) {
 
                 val uploaded =
-                    response.data
+                    body.data
                         ?: return SyncResult.Error("No remoteId")
 
                 SyncResult.Success(
@@ -78,18 +87,49 @@ class FileRemoteRepository {
                     version = uploaded.version
                 )
 
+            } else if (response.isSuccessful) {
+
+                // 2xx carrying success = false, or an envelope with no
+                // data. Reported with the code so it is not mistaken for
+                // a transport fault.
+                SyncResult.Error(
+                    body?.message
+                        ?: "HTTP ${response.code()} with no body"
+                )
+
             } else {
 
-                SyncResult.Error(response.message)
+                val detail =
+                    errorDetail(
+                        response.code(),
+                        readErrorBody(response)
+                    )
 
+                if (response.code() == 413) {
+
+                    SyncResult.Error(
+                        "${file.title} was rejected as too large — $detail"
+                    )
+
+                } else {
+
+                    SyncResult.Error(detail.toString())
+                }
             }
 
         } catch (e: Exception) {
 
-            Log.e("SYNC", "Upload failed", e)
+            Log.e(
+                "SYNC",
+                "Upload failed for ${file.title}",
+                e
+            )
 
+            // Keeps the class name: a body the server cuts off mid-write
+            // throws an IOException whose message is often null, which
+            // used to surface as a bare "Unknown error".
             SyncResult.Error(
-                e.message ?: "Unknown error"
+                "${e.javaClass.simpleName}: ${e.message ?: "no message"}"
             )
         }
     }
@@ -471,5 +511,14 @@ class FileRemoteRepository {
 
         /** Enough for a JSON error; keeps an HTML page out of logcat. */
         const val MAX_BODY_CHARS = 1000
+
+        const val BYTES_PER_MB = 1024 * 1024
+
+        /**
+         * Mirrors the server's spring.servlet.multipart.max-file-size of
+         * 100MB. Only a pre-flight — if the two ever drift apart, the
+         * server's 413 is what the caller ends up reporting.
+         */
+        const val MAX_UPLOAD_BYTES = 100L * BYTES_PER_MB
     }
 }
