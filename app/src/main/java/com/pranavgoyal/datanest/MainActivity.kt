@@ -10,9 +10,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pranavgoyal.datanest.ui.theme.MyApplicationTheme
-import com.pranavgoyal.datanest.ui.theme.uii.MainNavigation
-import com.pranavgoyal.datanest.ui.theme.viewModel.RoomViewModel
-import com.pranavgoyal.datanest.ui.theme.worker.SyncScheduler
+import com.pranavgoyal.datanest.ui.screens.MainNavigation
+import com.pranavgoyal.datanest.ui.viewmodel.RoomViewModel
+import com.pranavgoyal.datanest.sync.SyncScheduler
 import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
