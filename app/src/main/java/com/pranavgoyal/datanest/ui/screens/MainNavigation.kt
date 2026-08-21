@@ -77,6 +77,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -115,10 +116,13 @@ import com.pranavgoyal.datanest.ui.icons.sideBar
 import com.pranavgoyal.datanest.data.local.FileStored
 import com.pranavgoyal.datanest.data.local.SyncStatus
 import com.pranavgoyal.datanest.ui.viewmodel.RoomViewModel
+import com.pranavgoyal.datanest.sync.SyncScheduler
 import com.google.accompanist.navigation.animation.AnimatedNavHost
 import com.google.accompanist.navigation.animation.rememberAnimatedNavController
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
@@ -234,31 +238,37 @@ fun MainNavigation(sharedUri: Uri? = null,
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<Uri> ->
-        val files = mutableListOf<Triple<String, String, Uri>>()
-        uris.forEach { uri ->
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: SecurityException) { }
+        // One resolver query per picked file, so off the main thread —
+        // a large multi-select would otherwise block it that many times
+        // over. Only the state writes come back to Main.
+        scope.launch {
+            val files = withContext(Dispatchers.IO) {
+                uris.map { uri ->
+                    try {
+                        context.contentResolver.takePersistableUriPermission(
+                            uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: SecurityException) { }
 
-            var fileName = "Unknown"
-            val fileType = context.contentResolver.getType(uri) ?: "Unknown"
+                    var fileName = "Unknown"
+                    val fileType = context.contentResolver.getType(uri) ?: "Unknown"
 
-            val cursor = context.contentResolver.query(uri, null, null, null, null)
-            cursor?.use { c ->
-                val nameIndex = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (c.moveToFirst() && nameIndex >= 0) {
-                    fileName = c.getString(nameIndex)
+                    val cursor = context.contentResolver.query(uri, null, null, null, null)
+                    cursor?.use { c ->
+                        val nameIndex = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (c.moveToFirst() && nameIndex >= 0) {
+                            fileName = c.getString(nameIndex)
+                        }
+                    }
+
+                    Triple(fileName, fileType, uri)
                 }
             }
-
-            files.add(Triple(fileName, fileType, uri))
-        }
-        if (files.isNotEmpty()) {
-            selectedFiles = files
-            showReviewScreen = true
+            if (files.isNotEmpty()) {
+                selectedFiles = files
+                showReviewScreen = true
+            }
         }
     }
     ModalNavigationDrawer(drawerState = drawerState,
@@ -477,31 +487,31 @@ fun MainNavigation(sharedUri: Uri? = null,
                                         })
                                     Text("Review Selected Files", fontSize = 20.sp, color = Color.White)
                                     TextButton(onClick = {
-                                        if (sharedUri != null) {
-                                            val info = getFileInfo(
-                                                context,
-                                                sharedUri
-                                            )
-                                            roomViewModel.saveFile(
-                                                createFileStored(
-                                                    context = context,
-                                                    name = info.name,
-                                                    mimeType = info.mimeType,
-                                                    uri = info.uri
-                                                ),
-                                                context = context
-                                            )
-                                        } else {
-                                            selectedFiles.forEach { file ->
+                                        scope.launch {
+                                            if (sharedUri != null) {
+                                                val info = getFileInfo(
+                                                    context,
+                                                    sharedUri
+                                                )
                                                 roomViewModel.saveFile(
                                                     createFileStored(
                                                         context = context,
-                                                        name = file.first,
-                                                        mimeType = file.second,
-                                                        uri = file.third
-                                                    ),
-                                                    context = context
+                                                        name = info.name,
+                                                        mimeType = info.mimeType,
+                                                        uri = info.uri
+                                                    )
                                                 )
+                                            } else {
+                                                selectedFiles.forEach { file ->
+                                                    roomViewModel.saveFile(
+                                                        createFileStored(
+                                                            context = context,
+                                                            name = file.first,
+                                                            mimeType = file.second,
+                                                            uri = file.third
+                                                        )
+                                                    )
+                                                }
                                             }
                                         }
                                         showReviewScreen = false
@@ -523,8 +533,13 @@ fun MainNavigation(sharedUri: Uri? = null,
                             modifier = Modifier
                         ) {
                             IconButton(onClick = {
+                                // No delay: the user is watching. If a
+                                // sync is already running KEEP drops
+                                // this, which is the right answer — the
+                                // work is happening.
+                                SyncScheduler.start(context)
                             }) {
-                                Icon(imageVector = Sync, contentDescription = null)
+                                Icon(imageVector = Sync, contentDescription = "Sync now")
                             }
                         }
                         Spacer(modifier = Modifier.height(10.dp))
@@ -740,8 +755,15 @@ fun MainNavigation(sharedUri: Uri? = null,
                     ) {
                             entry ->
                         val uri = entry.arguments?.getString("uri")?.let { Uri.parse(it) }
-                        val new : FileInfo? = uri?.let { getFileInfo(context, it) }
-                        val newfile = new?.let { Triple(it.name, new.mimeType, new.uri) }
+                        // Resolved in produceState rather than inline: this
+                        // runs during composition, so querying the resolver
+                        // here blocked the main thread on every recomposition.
+                        // newFile is null for the first frame, which the
+                        // screen already handles.
+                        val new : FileInfo? by produceState<FileInfo?>(null, uri) {
+                            value = uri?.let { getFileInfo(context, it) }
+                        }
+                        val newfile = new?.let { Triple(it.name, it.mimeType, it.uri) }
                         ReviewFilesScreen(
                             navController,
                             files = selectedFiles,
@@ -771,7 +793,16 @@ data class FileInfo(
     val uri : Uri
 )
 
-fun getFileInfo(context: Context, uri: Uri): FileInfo {
+/**
+ * Suspending because ContentResolver.query goes to disk through another
+ * process. Called from Compose callbacks, so on the main thread it is
+ * jank — and a multi-select pays it once per file.
+ */
+suspend fun getFileInfo(
+    context: Context,
+    uri: Uri
+): FileInfo = withContext(Dispatchers.IO) {
+
     val contentResolver = context.contentResolver
 
     val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
@@ -790,7 +821,7 @@ fun getFileInfo(context: Context, uri: Uri): FileInfo {
         fileName = uri.lastPathSegment ?: "shared_file"
     }
 
-    return FileInfo(
+    FileInfo(
         name = fileName ?: "shared_file",
         mimeType = mimeType,
         uri = uri
@@ -798,12 +829,13 @@ fun getFileInfo(context: Context, uri: Uri): FileInfo {
 }
 
 
-fun createFileStored(
+/** Queries the size off the resolver, so off the main thread — see [getFileInfo]. */
+suspend fun createFileStored(
     context: Context,
     name: String,
     mimeType: String,
     uri: Uri
-): FileStored {
+): FileStored = withContext(Dispatchers.IO) {
 
     val size = context.contentResolver
         .query(uri, null, null, null, null)
@@ -822,7 +854,7 @@ fun createFileStored(
             }
         } ?: 0L
 
-    return FileStored(
+    FileStored(
         title = name,
         uri = uri.toString(),
         mimeType = mimeType,

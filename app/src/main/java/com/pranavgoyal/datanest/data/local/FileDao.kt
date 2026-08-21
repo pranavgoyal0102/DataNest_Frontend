@@ -238,4 +238,22 @@ interface FileDao {
     """)
     suspend fun getPendingUploadFiles(): List<FileStored>
 
+    /**
+     * Rows carrying work a sync pass has not attempted yet.
+     *
+     * FAILED is deliberately excluded, and the exclusion is load-bearing:
+     * a completed pass leaves every row it touched at SYNCED or FAILED,
+     * so counting FAILED here would make a permanently-rejected file — an
+     * oversized upload, say — re-enqueue a sync forever. PENDING_UPLOAD is
+     * out for the same reason; it is only ever a mid-pass state.
+     *
+     * What is left is work that arrived while a sync was running, which
+     * is exactly what needs another pass.
+     */
+    @Query("""
+    SELECT COUNT(*) FROM files
+    WHERE syncStatus IN ('LOCAL_ONLY', 'PENDING_UPDATE', 'PENDING_PURGE')
+    """)
+    suspend fun getDirtyFileCount(): Int
+
 }

@@ -2,23 +2,19 @@ package com.pranavgoyal.datanest.ui.viewmodel
 
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.pranavgoyal.datanest.data.local.FileStored
 import com.pranavgoyal.datanest.data.local.SyncStatus
-import com.pranavgoyal.datanest.data.remote.FileRemoteRepository
 import kotlinx.coroutines.launch
 import com.pranavgoyal.datanest.data.local.AppDatabase
 import com.pranavgoyal.datanest.data.local.FileRepository
-import com.pranavgoyal.datanest.sync.SyncRepo
 import com.pranavgoyal.datanest.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 
@@ -32,16 +28,20 @@ class RoomViewModel(
     private val repository = FileRepository(
         db.fileDao()
     )
-    private val remoteRepository =
-        FileRemoteRepository()
-
-    private val syncRepository =
-        SyncRepo(
-            application,
-            repository,
-            remoteRepository
-        )
     private var searchJob: Job? = null
+
+    /**
+     * Kicks a sync after a local edit. Batched rather than immediate —
+     * see [SyncScheduler.COALESCE_DELAY_SECONDS] — so a burst of edits
+     * folds into one run instead of one run apiece.
+     */
+    private fun scheduleSync() {
+
+        SyncScheduler.start(
+            getApplication(),
+            SyncScheduler.COALESCE_DELAY_SECONDS
+        )
+    }
 
     val fileList = repository
         .getFiles()
@@ -68,17 +68,14 @@ class RoomViewModel(
 
 
     fun saveFile(
-        file: FileStored,
-        context: Context
+        file: FileStored
     ) {
 
         viewModelScope.launch {
 
             repository.saveFile(file)
 
-            SyncScheduler.start(
-                context
-            )
+            scheduleSync()
         }
     }
 
@@ -108,6 +105,8 @@ class RoomViewModel(
                     SyncStatus.PENDING_PURGE
                 )
             )
+
+            scheduleSync()
         }
     }
 
@@ -169,6 +168,8 @@ class RoomViewModel(
                     )
                 )
 
+                scheduleSync()
+
                 onResult(
                     true,
                     "File Updated"
@@ -200,6 +201,8 @@ class RoomViewModel(
                         SyncStatus.PENDING_UPDATE
                     )
                 )
+
+                scheduleSync()
             }
         }
     }
@@ -226,20 +229,9 @@ class RoomViewModel(
                         SyncStatus.PENDING_UPDATE
                     )
                 )
+
+                scheduleSync()
             }
-        }
-    }
-
-    fun syncAllFiles() {
-
-        FirebaseAuth
-            .getInstance()
-            .currentUser
-            ?: return
-
-        viewModelScope.launch {
-
-            syncRepository.syncAllFiles()
         }
     }
 }

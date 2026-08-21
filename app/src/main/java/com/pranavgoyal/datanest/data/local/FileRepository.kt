@@ -85,6 +85,11 @@ class FileRepository(
     }
 
 
+    suspend fun getDirtyFileCount(): Int {
+        return fileDao.getDirtyFileCount()
+    }
+
+
     suspend fun updateRemoteId(
         id: Long,
         remoteId: String,

@@ -23,8 +23,6 @@ import coil.compose.AsyncImage
 import com.pranavgoyal.datanest.ui.viewmodel.GoogleAuthUiClient
 import com.google.firebase.auth.FirebaseAuth
 import androidx.credentials.CustomCredential
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.pranavgoyal.datanest.ui.viewmodel.RoomViewModel
 import com.pranavgoyal.datanest.sync.SyncScheduler
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.launch
@@ -32,7 +30,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun ProfileScreen(navController: NavController) {
 
-    val roomViewModel: RoomViewModel = viewModel()
     val context = LocalContext.current
     val activity = context.findActivity()
     val scope = rememberCoroutineScope()
@@ -113,7 +110,6 @@ fun ProfileScreen(navController: NavController) {
 
                             if(firebaseUser != null){
 
-                                roomViewModel.syncAllFiles()
                                 SyncScheduler.start(context)
 
                                 Toast.makeText(

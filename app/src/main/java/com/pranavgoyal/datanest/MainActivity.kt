@@ -12,7 +12,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.pranavgoyal.datanest.ui.theme.MyApplicationTheme
 import com.pranavgoyal.datanest.ui.screens.MainNavigation
 import com.pranavgoyal.datanest.ui.viewmodel.RoomViewModel
-import com.pranavgoyal.datanest.sync.SyncScheduler
 import com.google.firebase.auth.FirebaseAuth
 
 class MainActivity : ComponentActivity() {
@@ -32,9 +31,6 @@ class MainActivity : ComponentActivity() {
                     .currentUser?.uid
             }"
         )
-        SyncScheduler.start(this)
-        Log.d("SYNC", "Worker scheduled")
-
         setContent {
             MyApplicationTheme(darkTheme = true) {
                 MainNavigation(

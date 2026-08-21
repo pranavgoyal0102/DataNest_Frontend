@@ -65,6 +65,26 @@ class SyncWorker(
             syncRepository.deltaSync()
 
             Log.d("SYNC_WORKER", "Sync completed in $syncMode mode")
+
+            // An edit made while this pass was running had its trigger
+            // dropped by ExistingWorkPolicy.KEEP, so nothing else is
+            // going to pick it up. Re-enqueue for it.
+            //
+            // This terminates: getDirtyFileCount() ignores FAILED, and a
+            // completed pass leaves every row it touched at SYNCED or
+            // FAILED, so a count above zero really does mean new work.
+            val dirty = fileRepository.getDirtyFileCount()
+
+            if (dirty > 0) {
+
+                Log.d(
+                    "SYNC_WORKER",
+                    "$dirty row(s) changed mid-sync, re-enqueueing"
+                )
+
+                SyncScheduler.startFollowUp(applicationContext)
+            }
+
             Result.success()
 
         } catch (e: Exception) {
