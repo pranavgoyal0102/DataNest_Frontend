@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,14 +47,32 @@ import com.pranavgoyal.datanest.ui.icons.ImageIcon
 import com.pranavgoyal.datanest.ui.icons.Solid_Folder
 
 
+/**
+ * [isResolving] is true while a shared URI is still being read off the
+ * ContentResolver. It has no default on purpose: without it this screen
+ * cannot tell "nothing to review" from "the file has not arrived yet",
+ * and guessing wrong means leaving before the user sees anything.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewFilesScreen(
     navController: NavController,
     files: List<Triple<String, String, Uri>>,
     onRemove: (Triple<String, String, Uri>) -> Unit,
-    newFile : Triple<String, String, Uri>? = null
+    newFile : Triple<String, String, Uri>? = null,
+    isResolving: Boolean
 ) {
+
+    // Leaving is a side effect, so it belongs in an effect rather than in
+    // the composition — run inline it fired again on every recomposition.
+    // The isResolving guard is what keeps it from firing on the first
+    // frame, when newFile is still null because getFileInfo is in flight.
+    LaunchedEffect(isResolving, newFile, files) {
+        if (!isResolving && newFile == null && files.isEmpty()) {
+            navController.navigateUp()
+        }
+    }
+
     TopAppBar(title = {
     },
         modifier = Modifier.height(100.dp))
@@ -195,8 +214,6 @@ fun ReviewFilesScreen(
                             }
 
                         }
-                    }else{
-                        navController.navigateUp()
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))

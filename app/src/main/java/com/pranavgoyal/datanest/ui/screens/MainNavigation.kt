@@ -764,11 +764,16 @@ fun MainNavigation(sharedUri: Uri? = null,
                             value = uri?.let { getFileInfo(context, it) }
                         }
                         val newfile = new?.let { Triple(it.name, it.mimeType, it.uri) }
+                        // getFileInfo always returns a value, so a uri
+                        // with no result yet means exactly "still
+                        // reading it" — nothing else produces that pair.
+                        val resolving = uri != null && new == null
                         ReviewFilesScreen(
                             navController,
                             files = selectedFiles,
                             onRemove = { file -> selectedFiles = selectedFiles - file },
-                            newFile = newfile
+                            newFile = newfile,
+                            isResolving = resolving
                         )
                     }
                 }
