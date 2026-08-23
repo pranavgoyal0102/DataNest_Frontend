@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "79571777791",
+    "project_id": "datanest-8e95f",
+    "storage_bucket": "datanest-8e95f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:79571777791:android:1af5398820556a4617f4ca",
+        "android_client_info": {
+          "package_name": "com.example.myapplication"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "79571777791-3ac7q96a9vcr3huo87oaqqv4og7d9d6n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWTpEOS8A96bSpm56ANzSGILVDkl1P968"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "79571777791-3ac7q96a9vcr3huo87oaqqv4og7d9d6n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
