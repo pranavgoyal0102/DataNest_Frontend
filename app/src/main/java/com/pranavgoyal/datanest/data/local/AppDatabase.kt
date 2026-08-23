@@ -24,12 +24,6 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        /**
-         * Adds the server-assigned version column. Existing rows get 0,
-         * which is stale for anything already uploaded — the first PATCH
-         * on such a file returns 409 and SyncRepo reconciles from the
-         * server state in that response.
-         */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
 
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -43,12 +37,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /**
-         * Renames the PENDING_DELETE sync status to PENDING_PURGE. Not
-         * cosmetic — SyncStatus is persisted by name and read back
-         * through SyncStatus.valueOf, so any row left holding the old
-         * string would throw the moment it is loaded.
-         */
         private val MIGRATION_3_4 = object : Migration(3, 4) {
 
             override fun migrate(db: SupportSQLiteDatabase) {

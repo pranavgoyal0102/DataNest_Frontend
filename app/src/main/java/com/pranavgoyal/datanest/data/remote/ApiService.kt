@@ -17,18 +17,8 @@ import okhttp3.RequestBody
 import retrofit2.http.Multipart
 import retrofit2.http.Part
 
-/**
- * Every call is authenticated by [AuthInterceptor]; the server derives the
- * uid from the verified token, so nothing here passes firebaseUid.
- */
 interface ApiService {
 
-    /**
-     * Wrapped in [Response] so a rejection keeps its status code instead
-     * of arriving as a bare HttpException — the one that matters here is
-     * 413, which is how the server turns down a file over its
-     * max-file-size.
-     */
     @Multipart
     @POST("api/files/upload")
     suspend fun uploadFile(
@@ -40,12 +30,6 @@ interface ApiService {
 
     ): Response<ApiResponse<FileResponse>>
 
-    /**
-     * One page of rows changed since [cursor], which is the cursor off
-     * the previous page. Null on the first sync — Retrofit drops a null
-     * query param, and no cursor asks for everything. Enveloped like
-     * every other endpoint, so the page itself is under `data`.
-     */
     @GET("api/files/sync")
     suspend fun syncDelta(
 
@@ -57,11 +41,6 @@ interface ApiService {
 
     ): Response<ApiResponse<SyncPageResponse>>
 
-    /**
-     * Wrapped in [Response] so a 409 can be read off the error body —
-     * the server returns its current [FileResponse] there on a stale
-     * version, which is enough to reconcile without a re-fetch.
-     */
     @PATCH("api/files/{id}")
     suspend fun updateFile(
 
@@ -72,14 +51,6 @@ interface ApiService {
 
     ): Response<ApiResponse<FileResponse>>
 
-    /**
-     * Soft delete — moves the file to trash. Wrapped in [Response] so a
-     * rejection keeps its status code and body instead of arriving as a
-     * bare HttpException.
-     *
-     * Returns the stored file so the caller can pick up the version the
-     * server bumped to; omitting [version] is a 400.
-     */
     @POST("api/files/{id}/trash")
     suspend fun trashFile(
 
@@ -91,9 +62,6 @@ interface ApiService {
 
     ): Response<ApiResponse<FileResponse>>
 
-    /**
-     * Lifts a file back out of trash. Same version rules as [trashFile].
-     */
     @POST("api/files/{id}/restore")
     suspend fun restoreFile(
 
@@ -105,10 +73,6 @@ interface ApiService {
 
     ): Response<ApiResponse<FileResponse>>
 
-    /**
-     * Hard delete — destroys the file outright, so this is never the
-     * call for an ordinary delete. [trashFile] is the soft one.
-     */
     @DELETE("api/files/{id}")
     suspend fun deleteFilePermanently(
 

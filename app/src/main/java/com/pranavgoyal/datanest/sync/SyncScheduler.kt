@@ -12,25 +12,8 @@ object SyncScheduler {
 
     private const val UNIQUE_WORK_NAME = "file_sync"
 
-    /**
-     * How long a local edit waits before its sync runs. Rapid edits —
-     * starring three files in a row — all land inside this window, and
-     * ExistingWorkPolicy.KEEP drops the later ones against the request
-     * already sitting in ENQUEUED. One run then covers all of them.
-     *
-     * Dropping a trigger loses nothing because [SyncWorker] syncs
-     * whatever is pending in the database rather than a row handed to it
-     * in inputData.
-     */
     const val COALESCE_DELAY_SECONDS = 5L
 
-    /**
-     * Enqueues a sync, coalescing against any already-pending run.
-     *
-     * [delaySeconds] is the batching window. Pass 0 for a trigger the
-     * user is waiting on — the manual button, or coming back to the app
-     * — and [COALESCE_DELAY_SECONDS] for a local edit.
-     */
     fun start(
         context: Context,
         delaySeconds: Long = 0
@@ -43,16 +26,6 @@ object SyncScheduler {
         )
     }
 
-    /**
-     * Queues one more pass to run after the pass currently in flight.
-     *
-     * Only for [SyncWorker] to call on itself. KEEP would be wrong here:
-     * the running worker still counts as pending work under its own
-     * unique name, so a KEEP enqueue from inside it is silently dropped
-     * and the follow-up never happens. APPEND_OR_REPLACE instead hangs
-     * the new request off the running one, and falls back to replacing
-     * if that run ends up cancelled or failed.
-     */
     fun startFollowUp(context: Context) {
 
         enqueue(

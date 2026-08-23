@@ -29,11 +29,6 @@ class FileRemoteRepository {
         file: FileStored
     ): SyncResult {
 
-        // Cheap pre-flight, so an oversized file fails at once instead of
-        // after pushing the whole body up only to be turned down. The
-        // server stays the authority — size is 0 when the picker could
-        // not report one, and the multipart envelope adds a little on top
-        // — so the 413 branch below is still the one that decides.
         if (file.size > MAX_UPLOAD_BYTES) {
 
             return SyncResult.Error(
@@ -89,9 +84,6 @@ class FileRemoteRepository {
 
             } else if (response.isSuccessful) {
 
-                // 2xx carrying success = false, or an envelope with no
-                // data. Reported with the code so it is not mistaken for
-                // a transport fault.
                 SyncResult.Error(
                     body?.message
                         ?: "HTTP ${response.code()} with no body"
@@ -125,21 +117,12 @@ class FileRemoteRepository {
                 e
             )
 
-            // Keeps the class name: a body the server cuts off mid-write
-            // throws an IOException whose message is often null, which
-            // used to surface as a bare "Unknown error".
             SyncResult.Error(
                 "${e.javaClass.simpleName}: ${e.message ?: "no message"}"
             )
         }
     }
 
-
-
-    /**
-     * Fetches one page of the delta feed. [cursor] is the previous
-     * page's cursor, or null on a first sync, which asks for everything.
-     */
     suspend fun syncDelta(
         cursor: String?,
         limit: Int
@@ -167,9 +150,6 @@ class FileRemoteRepository {
 
             } else if (response.isSuccessful) {
 
-                // 2xx carrying success = false, or an envelope with no
-                // data. Reported with the code so it is not mistaken
-                // for a transport fault.
                 DeltaResult.HttpError(
                     HttpErrorDetail(
                         code = response.code(),
@@ -274,9 +254,6 @@ class FileRemoteRepository {
         }
     }
 
-    /**
-     * Soft delete — moves the file to trash server-side.
-     */
     suspend fun trashFile(
         remoteId: String,
         version: Long
@@ -305,9 +282,6 @@ class FileRemoteRepository {
         }
     }
 
-    /**
-     * Lifts a file back out of trash server-side.
-     */
     suspend fun restoreFile(
         remoteId: String,
         version: Long
@@ -336,10 +310,6 @@ class FileRemoteRepository {
         }
     }
 
-    /**
-     * Hard delete — destroys the file outright. A stale [version] is a
-     * 409, and omitting it is a 400.
-     */
     suspend fun deleteFilePermanently(
         remoteId: String,
         version: Long
@@ -368,10 +338,6 @@ class FileRemoteRepository {
         }
     }
 
-    /**
-     * Maps one delete response onto [DeleteResult], keeping the status
-     * code and body on every failure path.
-     */
     private fun <T> classify(
         response: Response<ApiResponse<T>>
     ): DeleteResult {
@@ -380,8 +346,6 @@ class FileRemoteRepository {
 
             val body = response.body()
 
-            // A 2xx with success = false is still a rejection; report it
-            // with the code so it is not mistaken for a transport fault.
             return if (body == null || body.success) {
 
                 DeleteResult.Success
@@ -398,8 +362,6 @@ class FileRemoteRepository {
             }
         }
 
-        // Read once and reuse — the error body is a one-shot stream, so
-        // parsing it after building the detail would come back empty.
         val raw = readErrorBody(response)
 
         val detail =
@@ -421,7 +383,6 @@ class FileRemoteRepository {
         }
     }
 
-    /** One-shot: the stream is spent once read, so callers must reuse. */
     private fun readErrorBody(
         response: Response<*>
     ): String? {
@@ -453,10 +414,6 @@ class FileRemoteRepository {
         )
     }
 
-    /**
-     * Pulls `message` off the body when it is one of ours. Parsed
-     * leniently — a proxy or container can answer with HTML instead.
-     */
     private fun serverMessage(
         raw: String?
     ): String? {
@@ -509,16 +466,10 @@ class FileRemoteRepository {
 
     private companion object {
 
-        /** Enough for a JSON error; keeps an HTML page out of logcat. */
         const val MAX_BODY_CHARS = 1000
 
         const val BYTES_PER_MB = 1024 * 1024
 
-        /**
-         * Mirrors the server's spring.servlet.multipart.max-file-size of
-         * 100MB. Only a pre-flight — if the two ever drift apart, the
-         * server's 413 is what the caller ends up reporting.
-         */
         const val MAX_UPLOAD_BYTES = 100L * BYTES_PER_MB
     }
 }

@@ -20,12 +20,6 @@ class SyncCursorStore(
             Context.MODE_PRIVATE
         )
 
-    /**
-     * Written with commit() rather than apply(): the caller persists this
-     * only after a page is applied, and a background sync can be killed
-     * the moment it returns. An apply() still in flight would lose the
-     * page boundary and re-pull it next run.
-     */
     var cursor: String?
         get() =
             prefs.getString(

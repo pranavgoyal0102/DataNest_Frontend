@@ -44,13 +44,6 @@ class SyncWorker(
 
             syncRepository.syncAllFiles()
 
-            // Runs every time now. The delta is cheap when nothing has
-            // changed — one request that comes back empty — and gating
-            // it the way the full-list pull was gated would mean an
-            // incremental sync never saw remote edits at all.
-            //
-            // MODE_FULL still means something: it drops the cursor, so
-            // the next pull starts from scratch.
             if (syncMode == MODE_FULL) {
 
                 Log.d(
@@ -66,13 +59,6 @@ class SyncWorker(
 
             Log.d("SYNC_WORKER", "Sync completed in $syncMode mode")
 
-            // An edit made while this pass was running had its trigger
-            // dropped by ExistingWorkPolicy.KEEP, so nothing else is
-            // going to pick it up. Re-enqueue for it.
-            //
-            // This terminates: getDirtyFileCount() ignores FAILED, and a
-            // completed pass leaves every row it touched at SYNCED or
-            // FAILED, so a count above zero really does mean new work.
             val dirty = fileRepository.getDirtyFileCount()
 
             if (dirty > 0) {

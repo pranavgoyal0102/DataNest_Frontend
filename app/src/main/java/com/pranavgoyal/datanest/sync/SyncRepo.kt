@@ -18,16 +18,6 @@ class SyncRepo(
     private val remoteRepo: FileRemoteRepository
 ){
 
-    /**
-     * Pulls everything changed since the stored cursor, a page at a time.
-     *
-     * Nothing is ever removed here. A row with isDeleted = true is
-     * trashed, not purged, and has to stay so the trash screen can show
-     * it; a file purged server-side just stops appearing in the feed,
-     * which is indistinguishable from it being unchanged. A device
-     * offline across a purge therefore keeps its copy — known gap, and
-     * closing it needs the server to emit tombstones.
-     */
     suspend fun deltaSync() {
 
         val store = SyncCursorStore(context)
@@ -56,9 +46,6 @@ class SyncRepo(
 
                     is DeltaResult.HttpError -> {
 
-                        // Leave the cursor alone: advancing past rows
-                        // that were never applied would skip them for
-                        // good. The next run retries from here.
                         Log.e(
                             "SYNC",
                             "Delta page rejected at cursor=$cursor: " +
@@ -80,10 +67,6 @@ class SyncRepo(
                     }
                 }
 
-            // Null means the payload did not have the shape we expect —
-            // a changed envelope, a proxy answering in HTML. Surface it
-            // and leave the cursor be; treating it as an empty page
-            // would advance past rows that were never applied.
             val rows =
                 page.changes
                     ?: run {
@@ -107,18 +90,12 @@ class SyncRepo(
 
             if (next != null && next != cursor) {
 
-                // Persisted only after the page is applied. A crash in
-                // between re-fetches a page that is already in, and
-                // applying it twice lands on the same state.
                 store.cursor = next
 
                 cursor = next
 
             } else if (page.hasMore) {
 
-                // Same cursor handed back with more promised, or none at
-                // all: following it would re-request this page forever.
-                // Compared for equality only — the value stays opaque.
                 Log.e(
                     "SYNC",
                     "Delta cursor did not change at $cursor " +
@@ -146,11 +123,6 @@ class SyncRepo(
         )
     }
 
-    /**
-     * Folds one remote row into the local table. Unchanged in substance
-     * from the full-list pull this replaced: a local edit still in
-     * flight keeps its fields and takes only the server's version.
-     */
     private suspend fun applyRemote(
         remote: FileResponse
     ) {
@@ -234,9 +206,6 @@ class SyncRepo(
 
             } else {
 
-                // Local edit is pending, so its fields stay put — but
-                // take the server's version anyway, otherwise the
-                // eventual PATCH goes out stale and 409s.
                 if (remote.version != existing.version) {
 
                     localRepo.updateVersion(
@@ -266,7 +235,6 @@ class SyncRepo(
 
         const val PAGE_SIZE = 200
 
-        /** Bounds a server that never stops saying hasMore. */
         const val MAX_PAGES = 50
     }
 
@@ -378,15 +346,6 @@ class SyncRepo(
         }
     }
 
-    /**
-     * Pushes one pending edit, resolving a stale-version 409 with the
-     * server state carried in that response.
-     *
-     * The tie-break matches [downloadCloudFiles]: a strictly newer server
-     * edit wins, otherwise the local edit is re-sent with the server's
-     * version. [retryOnConflict] bounds that to a single retry so a
-     * repeatedly-conflicting file can't spin.
-     */
     private suspend fun pushUpdate(
         file: FileStored,
         retryOnConflict: Boolean = true
@@ -481,11 +440,6 @@ class SyncRepo(
         }
     }
 
-    /**
-     * Hard-deletes files the user explicitly destroyed from the trash
-     * screen, via DELETE api/files/{id}?version=. Trashing is handled by
-     * [syncUpdatedFiles] as an ordinary PATCH with isDeleted = true.
-     */
     private suspend fun syncPurgedFiles() {
 
         val pendingPurges =
@@ -516,19 +470,12 @@ class SyncRepo(
                     "DELETE api/files/$remoteId" +
                             "?version=${file.version}"
 
-                // Purge is only reachable from the trash screen, so the
-                // file is already trashed server-side by the time this
-                // runs — there is no trash-first step to do here.
                 var result =
                     remoteRepo.deleteFilePermanently(
                         remoteId,
                         file.version
                     )
 
-                // A stale version comes back with the server's current
-                // state attached, so the right version is already in
-                // hand. Retried once — a second conflict means something
-                // else is writing, and spinning would not help.
                 val conflict = result as? DeleteResult.Conflict
 
                 val server = conflict?.server
@@ -575,9 +522,6 @@ class SyncRepo(
 
                     is DeleteResult.NotFound -> {
 
-                        // Already gone server-side. Retrying will never
-                        // succeed, so flag it loudly rather than leaving
-                        // the row cycling through FAILED forever.
                         localRepo.updateSyncStatus(
                             file.id,
                             SyncStatus.FAILED.name
@@ -592,10 +536,6 @@ class SyncRepo(
 
                     is DeleteResult.Conflict -> {
 
-                        // Either the retry conflicted too, or the body
-                        // carried no state to retry with. The row keeps
-                        // PENDING_PURGE intent via FAILED and the next
-                        // downloadCloudFiles refreshes its version.
                         localRepo.updateSyncStatus(
                             file.id,
                             SyncStatus.FAILED.name

@@ -11,13 +11,6 @@ class FileDownloader(
     private val context: Context
 ) {
 
-    /**
-     * Pinned to Dispatchers.IO because the body blocks for the whole
-     * transfer. Its caller is SyncRepo, which runs on CoroutineWorker's
-     * Dispatchers.Default — a pool sized to the CPU count — so a couple of
-     * concurrent downloads there would tie up threads meant for compute
-     * and stall everything else scheduled on it.
-     */
     suspend fun downloadFile(
         url: String,
         fileName: String
